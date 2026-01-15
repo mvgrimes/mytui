@@ -111,6 +111,7 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
 
 7. **Configuration System**
    - Port myclirc configuration format
+   - Default config files should live in ~/.config/sqlcli/config (with appropriate suffix)
    - Support for system and user config files
    - Implement all configuration options from Python version
 
@@ -135,20 +136,22 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
 
 ### Phase 4: Polish and Testing
 
-11. **LLM Integration**
-    - Port LLM command support
-    - Implement AI-powered query assistance
-
-12. **Comprehensive Testing**
+11. **Comprehensive Testing**
     - Unit tests for all components
     - Integration tests with real MySQL instances
     - Feature tests mirroring Python version
     - Cross-platform testing
 
-13. **Documentation and Packaging**
+12. **Documentation and Packaging**
     - Create comprehensive README and documentation
     - Implement installation scripts/packages
     - Add man pages and help system
+
+### Phase x: Not planned
+
+13. **LLM Integration**
+    - Port LLM command support
+    - Implement AI-powered query assistance
 
 ## Directory Structure
 
