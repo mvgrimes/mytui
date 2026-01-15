@@ -104,7 +104,7 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
    - [x] Implement timing and logging
 
 6. **Output Formatting**
-   - [x] Implement tabular output formats (table, vertical)
+   - [x] Implement tabular output formats (table, vertical, CSV, TSV, unicode)
    - [x] Add colorization and syntax highlighting
    - [x] Implement pager support for large results
    - [ ] Add auto-vertical output based on terminal width
@@ -127,7 +127,7 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
 9. **Special Commands**
    - Implement all special commands (\u, \r, \fs, \f, etc.)
    - Add favorite queries with parameters
-   - Implement destructive query warnings
+   - Implement destructive query warnings [table this for now]
    - Add shell redirects ($>, $>>, $|)
 
 10. **Key Bindings and Editor Integration**
