@@ -19,6 +19,7 @@ type Config struct {
 	Prompt             string            `mapstructure:"prompt"`
 	PromptContinuation string            `mapstructure:"prompt_continuation"`
 	FavoriteQueries    map[string]string `mapstructure:"favorite_queries"`
+	AutoVerticalOutput bool              `mapstructure:"auto_vertical_output"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -42,6 +43,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("prompt", "\\t \\u@\\x1b[34m\\h\\x1b[0m:\\d> ")
 	viper.SetDefault("prompt_continuation", "-> ")
 	viper.SetDefault("favorite_queries", make(map[string]string))
+	viper.SetDefault("auto_vertical_output", true)
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("toml") // We'll use TOML as default for now, but viper is flexible

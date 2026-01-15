@@ -16,6 +16,7 @@ import (
 	"github.com/mvgrimes/mycli-go/internal/config"
 	"github.com/mvgrimes/mycli-go/internal/db"
 	"github.com/olekukonko/tablewriter"
+	"golang.org/x/term"
 )
 
 type Format string
@@ -58,13 +59,23 @@ func FormatSQL(sql string) string {
 }
 
 // PrintResult prints the database result in the specified format
-func PrintResult(result *db.Result, out io.Writer, format Format, cfg *config.Config) {
+func PrintResult(result *db.Result, out io.Writer, format Format, cfg *config.Config, pagerOverride string) {
 	var writer io.Writer = out
 	var cmd *exec.Cmd
 
-	// Use pager if results are large
-	if len(result.Rows) > 20 {
-		pager := cfg.Pager
+	// Handle auto-vertical output
+	if cfg.AutoVerticalOutput && format == FormatTable {
+		if calculateTotalWidth(result) > getTerminalWidth() {
+			format = FormatVertical
+		}
+	}
+
+	// Use pager if results are large or override is set
+	if len(result.Rows) > 20 || pagerOverride != "" {
+		pager := pagerOverride
+		if pager == "" {
+			pager = cfg.Pager
+		}
 		if pager == "" {
 			pager = os.Getenv("PAGER")
 		}
@@ -109,6 +120,51 @@ func PrintResult(result *db.Result, out io.Writer, format Format, cfg *config.Co
 	}
 }
 
+func getTerminalWidth() int {
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		return 80 // Default
+	}
+	return width
+}
+
+func calculateTotalWidth(result *db.Result) int {
+	if len(result.Headers) == 0 {
+		return 0
+	}
+
+	widths := make([]int, len(result.Headers))
+	for i, h := range result.Headers {
+		widths[i] = runewidth.StringWidth(h)
+	}
+
+	for _, row := range result.Rows {
+		for j, val := range row {
+			str := formatValue(val)
+			w := runewidth.StringWidth(str)
+			if w > widths[j] {
+				widths[j] = w
+			}
+		}
+	}
+
+	total := 1 // Initial |
+	for _, w := range widths {
+		total += w + 3 // " " + content + " " + |
+	}
+	return total
+}
+
+func formatValue(val interface{}) string {
+	if val == nil {
+		return "NULL"
+	} else if b, ok := val.([]byte); ok {
+		return string(b)
+	} else {
+		return fmt.Sprintf("%v", val)
+	}
+}
+
 func printTable(result *db.Result, out io.Writer) {
 	table := tablewriter.NewWriter(out)
 	table.SetHeader(result.Headers)
@@ -127,13 +183,7 @@ func printTable(result *db.Result, out io.Writer) {
 	for _, row := range result.Rows {
 		rowStrings := make([]string, len(row))
 		for i, val := range row {
-			if val == nil {
-				rowStrings[i] = "NULL"
-			} else if b, ok := val.([]byte); ok {
-				rowStrings[i] = string(b)
-			} else {
-				rowStrings[i] = fmt.Sprintf("%v", val)
-			}
+			rowStrings[i] = formatValue(val)
 		}
 		table.Append(rowStrings)
 	}
@@ -152,14 +202,7 @@ func printUnicode(result *db.Result, out io.Writer) {
 	for i, row := range result.Rows {
 		rows[i] = make([]string, len(row))
 		for j, val := range row {
-			str := ""
-			if val == nil {
-				str = "NULL"
-			} else if b, ok := val.([]byte); ok {
-				str = string(b)
-			} else {
-				str = fmt.Sprintf("%v", val)
-			}
+			str := formatValue(val)
 			rows[i][j] = str
 			w := runewidth.StringWidth(str)
 			if w > widths[j] {
@@ -217,15 +260,7 @@ func printVertical(result *db.Result, out io.Writer) {
 	for i, row := range result.Rows {
 		fmt.Fprintf(out, "*************************** %d. row ***************************\n", i+1)
 		for j, header := range result.Headers {
-			val := row[j]
-			valStr := ""
-			if val == nil {
-				valStr = "NULL"
-			} else if b, ok := val.([]byte); ok {
-				valStr = string(b)
-			} else {
-				valStr = fmt.Sprintf("%v", val)
-			}
+			valStr := formatValue(row[j])
 			fmt.Fprintf(out, "%s: %s\n", header, valStr)
 		}
 	}
@@ -238,10 +273,8 @@ func printCSV(result *db.Result, out io.Writer, delimiter string) {
 		for i, val := range row {
 			if val == nil {
 				rowStrings[i] = ""
-			} else if b, ok := val.([]byte); ok {
-				rowStrings[i] = string(b)
 			} else {
-				rowStrings[i] = fmt.Sprintf("%v", val)
+				rowStrings[i] = formatValue(val)
 			}
 		}
 		fmt.Fprintln(out, strings.Join(rowStrings, delimiter))

@@ -18,7 +18,13 @@ var sqlKeywords = []string{
 }
 
 var specialCommands = []prompt.Suggest{
-	{Text: "\\f", Description: "Change output format"},
+	{Text: "\\T", Description: "Change output format"},
+	{Text: "\\f", Description: "Execute favorite query"},
+	{Text: "\\fs", Description: "Save favorite query"},
+	{Text: "\\fd", Description: "Delete favorite query"},
+	{Text: "\\clip", Description: "Copy last result to clipboard"},
+	{Text: "\\once", Description: "Use format for next query only"},
+	{Text: "\\|", Description: "Pipe next result to shell command"},
 	{Text: "\\q", Description: "Quit"},
 	{Text: "\\e", Description: "Open external editor"},
 }
@@ -76,14 +82,14 @@ func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
 		if len(parts) == 0 {
 			return specialCommands
 		}
-		if parts[0] == "\\F" || parts[0] == "\\f" {
-			// If we are exactly at "\f ", suggest formats
-			if strings.HasSuffix(lineBefore, " ") {
+		if parts[0] == "\\T" || parts[0] == "\\t" || parts[0] == "\\once" {
+			// If we are exactly at "\T " or "\once ", suggest formats
+			if strings.HasSuffix(lineBefore, " ") && len(parts) == 1 {
 				return formatTypes
 			}
-			// If we are mid-word after "\f ", filter formats
-			if len(parts) > 1 {
-				return prompt.FilterHasPrefix(formatTypes, parts[len(parts)-1], true)
+			// If we are mid-word after command, filter formats
+			if len(parts) == 2 {
+				return prompt.FilterHasPrefix(formatTypes, parts[1], true)
 			}
 			return specialCommands
 		}

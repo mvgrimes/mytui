@@ -107,7 +107,7 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
    - [x] Implement tabular output formats (table, vertical, CSV, TSV, unicode)
    - [x] Add colorization and syntax highlighting
    - [x] Implement pager support for large results
-   - [ ] Add auto-vertical output based on terminal width
+   - [x] Add auto-vertical output based on terminal width
 
 7. **Configuration System**
    - [x] Port a subset of the myclirc configuration.
@@ -124,13 +124,14 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
    - [x] Syntax highlight the query
 
 9. **Special Commands**
-   - Implement special commands. Start with: \clip \e \fs \f \fd \once \| \T (need to change existing \f to \T)
-   - Add favorite queries with parameters
+   - [x] Implement special commands: \clip \e \fs \f \fd \once \| \T
+   - [x] Add favorite queries with parameters
 
 10. **Key Bindings and Editor Integration**
-     - [x] Port key binding system (Vim mode)
-     - [ ] Add external editor support
-     - [ ] Implement prettify/unprettify commands
+      - [x] Port key binding system (Vim mode)
+      - [x] Add external editor support (\e)
+      - [ ] Implement prettify/unprettify commands
+
 
 ### Phase 4: Polish and Testing
 

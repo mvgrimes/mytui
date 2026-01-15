@@ -13,6 +13,7 @@ import (
 	"github.com/mvgrimes/mycli-go/internal/config"
 	"github.com/mvgrimes/mycli-go/internal/db"
 	"github.com/mvgrimes/mycli-go/internal/formatter"
+	"github.com/mvgrimes/mycli-go/internal/special"
 	"github.com/mvgrimes/mycli-go/internal/vim"
 )
 
@@ -21,6 +22,8 @@ type REPL struct {
 	completer     *completion.Completer
 	vimState      *vim.VimState
 	currentFormat formatter.Format
+	onceFormat    formatter.Format
+	pagerOverride string
 	lastQuery     string
 	config        *config.Config
 	history       []string
@@ -168,6 +171,26 @@ func getMetadata(conn *db.Connection) (map[string][]string, error) {
 	return metadata, nil
 }
 
+func (r *REPL) GetConn() *db.Connection             { return r.conn }
+func (r *REPL) GetConfig() *config.Config           { return r.config }
+func (r *REPL) GetCurrentFormat() formatter.Format  { return r.currentFormat }
+func (r *REPL) SetCurrentFormat(f formatter.Format) { r.currentFormat = f }
+func (r *REPL) GetLastQuery() string                { return r.lastQuery }
+func (r *REPL) SetLastQuery(q string)               { r.lastQuery = q }
+func (r *REPL) SetOnceFormat(f formatter.Format)    { r.onceFormat = f }
+func (r *REPL) SetPagerOverride(p string)           { r.pagerOverride = p }
+
+func (r *REPL) ExecuteQueryWithFormat(query string, format formatter.Format) {
+	r.lastQuery = query
+	result, err := r.conn.ExecuteQuery(query)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return
+	}
+	formatter.PrintResult(result, os.Stdout, format, r.config, r.pagerOverride)
+	r.pagerOverride = "" // Reset after use
+}
+
 func (r *REPL) executor(line string) {
 	line = strings.TrimSpace(line)
 	if line == "" {
@@ -178,8 +201,7 @@ func (r *REPL) executor(line string) {
 	r.saveToHistory(line)
 
 	// Handle special commands
-	if strings.HasPrefix(line, "\\") {
-		r.handleSpecialCommand(line)
+	if special.Handle(line, r) {
 		return
 	}
 
@@ -190,8 +212,14 @@ func (r *REPL) executor(line string) {
 		os.Exit(0)
 	}
 
-	// Check for vertical output (\G)
+	// Check for onceFormat
 	format := r.currentFormat
+	if r.onceFormat != "" {
+		format = r.onceFormat
+		r.onceFormat = ""
+	}
+
+	// Check for vertical output (\G)
 	if strings.HasSuffix(line, "\\G") {
 		format = formatter.FormatVertical
 		line = strings.TrimSuffix(line, "\\G")
@@ -199,15 +227,7 @@ func (r *REPL) executor(line string) {
 	}
 
 	// Execute query
-	r.lastQuery = line
-	result, err := r.conn.ExecuteQuery(line)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		return
-	}
-
-	// Display results
-	formatter.PrintResult(result, os.Stdout, format, r.config)
+	r.ExecuteQueryWithFormat(line, format)
 
 	// Trigger schema refresh for DDL/USE commands
 	upperLine := strings.ToUpper(line)
@@ -229,23 +249,6 @@ func (r *REPL) handleSpecialCommand(line string) {
 	cmd := parts[0]
 
 	switch cmd {
-	case "\\q":
-		fmt.Println("Goodbye!")
-		os.Exit(0)
-	case "\\f":
-		if len(parts) < 2 {
-			fmt.Printf("Current format: %s\n", r.currentFormat)
-			fmt.Println("Usage: \\f [table|vertical|csv|tsv|unicode]")
-			return
-		}
-		newFormat := formatter.Format(parts[1])
-		switch newFormat {
-		case formatter.FormatTable, formatter.FormatVertical, formatter.FormatCSV, formatter.FormatTSV, formatter.FormatUnicode:
-			r.currentFormat = newFormat
-			fmt.Printf("Format changed to: %s\n", r.currentFormat)
-		default:
-			fmt.Printf("Unknown format: %s\n", newFormat)
-		}
 	case "\\e":
 		r.openExternalEditor()
 	default:
@@ -304,5 +307,5 @@ func (r *REPL) openExternalEditor() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return
 	}
-	formatter.PrintResult(result, os.Stdout, r.currentFormat, r.config)
+	formatter.PrintResult(result, os.Stdout, r.currentFormat, r.config, r.pagerOverride)
 }
