@@ -3,6 +3,8 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -85,4 +87,65 @@ func (c *Connection) GetServerInfo() (string, error) {
 		return "", err
 	}
 	return version, nil
+}
+
+type Result struct {
+	Headers  []string
+	Rows     [][]interface{}
+	Status   string
+	Duration time.Duration
+}
+
+func (c *Connection) ExecuteQuery(query string) (*Result, error) {
+	start := time.Now()
+
+	if isSelectQuery(query) {
+		rows, err := c.db.Query(query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		columns, err := rows.Columns()
+		if err != nil {
+			return nil, err
+		}
+
+		var resultRows [][]interface{}
+		for rows.Next() {
+			values := make([]interface{}, len(columns))
+			pointers := make([]interface{}, len(columns))
+			for i := range values {
+				pointers[i] = &values[i]
+			}
+			if err := rows.Scan(pointers...); err != nil {
+				return nil, err
+			}
+			resultRows = append(resultRows, values)
+		}
+
+		duration := time.Since(start)
+		return &Result{
+			Headers:  columns,
+			Rows:     resultRows,
+			Status:   fmt.Sprintf("%d rows in set", len(resultRows)),
+			Duration: duration,
+		}, nil
+	} else {
+		result, err := c.db.Exec(query)
+		if err != nil {
+			return nil, err
+		}
+		affected, _ := result.RowsAffected()
+		duration := time.Since(start)
+		return &Result{
+			Status:   fmt.Sprintf("Query OK, %d rows affected", affected),
+			Duration: duration,
+		}, nil
+	}
+}
+
+func isSelectQuery(query string) bool {
+	trimmed := strings.TrimSpace(strings.ToUpper(query))
+	return strings.HasPrefix(trimmed, "SELECT") || strings.HasPrefix(trimmed, "SHOW") || strings.HasPrefix(trimmed, "DESCRIBE")
 }
