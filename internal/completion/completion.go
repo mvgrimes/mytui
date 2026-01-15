@@ -17,6 +17,19 @@ var sqlKeywords = []string{
 	"COMMIT", "ROLLBACK", "TRANSACTION", "VALUES", "INTO", "TRUNCATE",
 }
 
+var specialCommands = []prompt.Suggest{
+	{Text: "\\f", Description: "Change output format"},
+	{Text: "\\q", Description: "Quit"},
+}
+
+var formatTypes = []prompt.Suggest{
+	{Text: "table", Description: "Standard table format"},
+	{Text: "vertical", Description: "Vertical format (like \\G)"},
+	{Text: "csv", Description: "Comma-separated values"},
+	{Text: "tsv", Description: "Tab-separated values"},
+	{Text: "unicode", Description: "Fancy unicode table format"},
+}
+
 type Completer struct {
 	keywords []prompt.Suggest
 	tables   []prompt.Suggest
@@ -52,6 +65,26 @@ func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
 	fullText := d.Text
 	upperLineBefore := strings.ToUpper(lineBefore)
 	wordsBefore := strings.Fields(upperLineBefore)
+
+	// 0. Handle special commands: \f
+	if strings.HasPrefix(lineBefore, "\\") {
+		parts := strings.Fields(lineBefore)
+		if len(parts) == 0 {
+			return specialCommands
+		}
+		if parts[0] == "\\F" || parts[0] == "\\f" {
+			// If we are exactly at "\f ", suggest formats
+			if strings.HasSuffix(lineBefore, " ") {
+				return formatTypes
+			}
+			// If we are mid-word after "\f ", filter formats
+			if len(parts) > 1 {
+				return prompt.FilterHasPrefix(formatTypes, parts[len(parts)-1], true)
+			}
+			return specialCommands
+		}
+		return prompt.FilterHasPrefix(specialCommands, word, true)
+	}
 
 	var suggestions []prompt.Suggest
 
