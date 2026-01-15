@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	// "github.com/mvgrimes/mycli-go/internal/db"
-	// "github.com/mvgrimes/mycli-go/internal/repl"
+	"github.com/mvgrimes/mycli-go/internal/db"
+	"github.com/mvgrimes/mycli-go/internal/repl"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +28,7 @@ administration and development.`,
 	rootCmd.Flags().BoolP("help", "", false, "help for mycli")
 
 	// Connection flags
-	rootCmd.Flags().String("host", "localhost", "Host address of the database")
+	rootCmd.Flags().StringP("host", "h", "localhost", "Host address of the database")
 	rootCmd.Flags().IntP("port", "P", 3306, "Port number to use for connection")
 	rootCmd.Flags().StringP("user", "u", "", "User name to connect to the database")
 	rootCmd.Flags().StringP("password", "p", "", "Password to connect to the database")
@@ -36,13 +36,13 @@ administration and development.`,
 	rootCmd.Flags().StringP("socket", "S", "", "The socket file to use for connection")
 
 	// SSL flags
-	rootCmd.Flags().String("ssl-mode", "auto", "Set desired SSL behavior (auto, on, off)")
+	rootCmd.Flags().String("ssl-mode", "preferred", "Set desired SSL behavior (disabled, preferred, required, verify-ca, verify-full)")
 	rootCmd.Flags().String("ssl-ca", "", "CA file in PEM format")
 	rootCmd.Flags().String("ssl-cert", "", "X509 cert in PEM format")
 	rootCmd.Flags().String("ssl-key", "", "X509 key in PEM format")
 
 	// Other flags
-	rootCmd.Flags().String("charset", "utf8", "Character set for MySQL session")
+	rootCmd.Flags().String("charset", "utf8mb4", "Character set for MySQL session")
 	rootCmd.Flags().Bool("local-infile", false, "Enable/disable LOAD DATA LOCAL INFILE")
 	rootCmd.Flags().String("init-command", "", "SQL statement to execute after connecting")
 
@@ -53,20 +53,44 @@ administration and development.`,
 }
 
 func runREPL(cmd *cobra.Command, args []string) error {
-	// For now, just print connection info and exit
-	// This will be replaced with the actual REPL implementation
-
 	host, _ := cmd.Flags().GetString("host")
 	port, _ := cmd.Flags().GetInt("port")
 	user, _ := cmd.Flags().GetString("user")
+	password, _ := cmd.Flags().GetString("password")
 	database, _ := cmd.Flags().GetString("database")
+	socket, _ := cmd.Flags().GetString("socket")
+	charset, _ := cmd.Flags().GetString("charset")
+	sslMode, _ := cmd.Flags().GetString("ssl-mode")
+	sslCa, _ := cmd.Flags().GetString("ssl-ca")
+	sslCert, _ := cmd.Flags().GetString("ssl-cert")
+	sslKey, _ := cmd.Flags().GetString("ssl-key")
 
-	fmt.Printf("Connecting to MySQL at %s:%d as user %s", host, port, user)
-	if database != "" {
-		fmt.Printf(" (database: %s)", database)
+	config := db.Config{
+		Host:     host,
+		Port:     port,
+		User:     user,
+		Password: password,
+		Database: database,
+		Socket:   socket,
+		Charset:  charset,
+		SSLMode:  sslMode,
+		SSLCa:    sslCa,
+		SSLCert:  sslCert,
+		SSLKey:   sslKey,
 	}
-	fmt.Println()
 
-	fmt.Println("REPL implementation coming soon...")
+	fmt.Printf("Connecting to MySQL at %s:%d as user %s...\n", host, port, user)
+	conn, err := db.NewConnection(config)
+	if err != nil {
+		return fmt.Errorf("failed to connect to database: %v", err)
+	}
+	defer conn.Close()
+
+	serverVersion, err := conn.GetServerInfo()
+	if err == nil {
+		fmt.Printf("Connected! Server version: %s\n", serverVersion)
+	}
+
+	repl.RunREPL(conn)
 	return nil
 }

@@ -75,33 +75,33 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
 ### Phase 1: Foundation and Core Infrastructure
 
 1. **Project Setup**
-   - Initialize Go module
-   - Set up basic directory structure
-   - Configure build system and CI/CD
+   - [x] Initialize Go module
+   - [x] Set up basic directory structure
+   - [ ] Configure build system and CI/CD
 
 2. **CLI Framework Integration**
-   - Implement command-line argument parsing
-   - Add basic connection options (host, port, user, password, database)
-   - Support for DSN and config files
+   - [x] Implement command-line argument parsing
+   - [x] Add basic connection options (host, port, user, password, database)
+   - [ ] Support for DSN and config files
 
 3. **Database Connection Layer**
-   - Implement basic MySQL/MariaDB connection
-   - Handle SSL/TLS configuration
-   - Add SSH tunneling support
-   - Implement connection pooling and reconnection logic
+   - [x] Implement basic MySQL/MariaDB connection
+   - [x] Handle SSL/TLS configuration
+   - [ ] Add SSH tunneling support
+   - [ ] Implement connection pooling and reconnection logic
 
 4. **Basic REPL**
-   - Create interactive prompt interface
-   - Implement basic query execution and result display
-   - Add history support
+   - [x] Create interactive prompt interface
+   - [x] Implement basic query execution and result display
+   - [x] Add history support
 
 ### Phase 2: Core Features
 
 5. **SQL Execution Engine**
-   - Implement query parsing and execution
-   - Add support for multi-statement queries
-   - Handle different result types (SELECT, DDL, DML)
-   - Implement timing and logging
+   - [x] Implement query parsing and execution
+   - [ ] Add support for multi-statement queries
+   - [x] Handle different result types (SELECT, DDL, DML)
+   - [x] Implement timing and logging
 
 6. **Output Formatting**
    - Implement tabular output formats (table, CSV, TSV, vertical)

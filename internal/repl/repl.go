@@ -26,12 +26,44 @@ func executor(conn *db.Connection) func(string) {
 		if line == "" {
 			return
 		}
-		if line == "exit" || line == "quit" {
+
+		// Handle exit commands
+		lowerLine := strings.ToLower(line)
+		if lowerLine == "exit" || lowerLine == "quit" || lowerLine == "\\q" {
 			fmt.Println("Goodbye!")
 			os.Exit(0)
 		}
-		fmt.Printf("Executing: %s\n", line)
-		// TODO: Actually execute the query
+
+		// Execute query
+		result, err := conn.ExecuteQuery(line)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			return
+		}
+
+		// Display results
+		if len(result.Headers) > 0 {
+			// Print headers
+			fmt.Println(strings.Join(result.Headers, "\t"))
+			fmt.Println(strings.Repeat("-", len(strings.Join(result.Headers, "\t"))+8))
+
+			// Print rows
+			for _, row := range result.Rows {
+				var rowStrings []string
+				for _, val := range row {
+					if val == nil {
+						rowStrings = append(rowStrings, "NULL")
+					} else if b, ok := val.([]byte); ok {
+						rowStrings = append(rowStrings, string(b))
+					} else {
+						rowStrings = append(rowStrings, fmt.Sprintf("%v", val))
+					}
+				}
+				fmt.Println(strings.Join(rowStrings, "\t"))
+			}
+		}
+
+		fmt.Printf("%s (%.2f sec)\n", result.Status, result.Duration.Seconds())
 	}
 }
 
