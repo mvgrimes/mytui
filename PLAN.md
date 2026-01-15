@@ -104,10 +104,10 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
    - [x] Implement timing and logging
 
 6. **Output Formatting**
-   - Implement tabular output formats (table, CSV, TSV, vertical)
-   - Add colorization and syntax highlighting
-   - Implement pager support for large results
-   - Add auto-vertical output based on terminal width
+   - [x] Implement tabular output formats (table, vertical)
+   - [x] Add colorization and syntax highlighting
+   - [x] Implement pager support for large results
+   - [ ] Add auto-vertical output based on terminal width
 
 7. **Configuration System**
    - Port myclirc configuration format
