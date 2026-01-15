@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dbcli/mycli-go/internal/db"
-	"github.com/dbcli/mycli-go/internal/repl"
+	// "github.com/mvgrimes/mycli-go/internal/db"
+	// "github.com/mvgrimes/mycli-go/internal/repl"
 	"github.com/spf13/cobra"
 )
 

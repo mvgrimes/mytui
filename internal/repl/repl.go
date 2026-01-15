@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/c-bata/go-prompt"
-	"github.com/dbcli/mycli-go/internal/db"
+	"github.com/mvgrimes/mycli-go/internal/db"
 )
 
 func RunREPL(conn *db.Connection) {
