@@ -118,10 +118,11 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
 ### Phase 3: Advanced Features
 
 8. **Auto-Completion System**
-   - Implement SQL keyword completion
-   - Add schema introspection (tables, columns, views)
-   - Implement smart completion based on context
-   - Add background completion refresh
+   - [x] Implement SQL keyword completion
+   - [x] Add schema introspection (tables, columns, views)
+   - [x] Implement smart completion based on context
+   - [x] Add background completion refresh
+   - [x] Syntax highlight the query
 
 9. **Special Commands**
    - Implement all special commands (\u, \r, \fs, \f, etc.)

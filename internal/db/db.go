@@ -145,6 +145,46 @@ func (c *Connection) ExecuteQuery(query string) (*Result, error) {
 	}
 }
 
+func (c *Connection) GetTables() ([]string, error) {
+	rows, err := c.db.Query("SHOW TABLES")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tables []string
+	for rows.Next() {
+		var table string
+		if err := rows.Scan(&table); err != nil {
+			return nil, err
+		}
+		tables = append(tables, table)
+	}
+	return tables, nil
+}
+
+func (c *Connection) GetColumns(table string) ([]string, error) {
+	rows, err := c.db.Query(fmt.Sprintf("SHOW COLUMNS FROM %s", table))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var columns []string
+	for rows.Next() {
+		var (
+			field, typ, null, key, def, extra sql.NullString
+		)
+		if err := rows.Scan(&field, &typ, &null, &key, &def, &extra); err != nil {
+			return nil, err
+		}
+		if field.Valid {
+			columns = append(columns, field.String)
+		}
+	}
+	return columns, nil
+}
+
 func isSelectQuery(query string) bool {
 	trimmed := strings.TrimSpace(strings.ToUpper(query))
 	return strings.HasPrefix(trimmed, "SELECT") || strings.HasPrefix(trimmed, "SHOW") || strings.HasPrefix(trimmed, "DESCRIBE")

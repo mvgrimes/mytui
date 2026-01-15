@@ -4,16 +4,37 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/c-bata/go-prompt"
+	"github.com/mvgrimes/mycli-go/internal/completion"
 	"github.com/mvgrimes/mycli-go/internal/db"
 	"github.com/mvgrimes/mycli-go/internal/formatter"
 )
 
 func RunREPL(conn *db.Connection) {
+	c := completion.NewCompleter()
+
+	// Initial schema fetch
+	metadata, err := getMetadata(conn)
+	if err == nil {
+		c.UpdateSchema(metadata)
+	}
+
+	// Background refresh every 5 minutes
+	go func() {
+		for {
+			time.Sleep(5 * time.Minute)
+			metadata, err := getMetadata(conn)
+			if err == nil {
+				c.UpdateSchema(metadata)
+			}
+		}
+	}()
+
 	p := prompt.New(
-		executor(conn),
-		completer,
+		executor(conn, c),
+		c.Complete,
 		prompt.OptionPrefix("mysql> "),
 		prompt.OptionTitle("mycli"),
 		prompt.OptionHistory([]string{}),
@@ -21,7 +42,23 @@ func RunREPL(conn *db.Connection) {
 	p.Run()
 }
 
-func executor(conn *db.Connection) func(string) {
+func getMetadata(conn *db.Connection) (map[string][]string, error) {
+	tables, err := conn.GetTables()
+	if err != nil {
+		return nil, err
+	}
+
+	metadata := make(map[string][]string)
+	for _, table := range tables {
+		columns, err := conn.GetColumns(table)
+		if err == nil {
+			metadata[table] = columns
+		}
+	}
+	return metadata, nil
+}
+
+func executor(conn *db.Connection, c *completion.Completer) func(string) {
 	return func(line string) {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -56,9 +93,19 @@ func executor(conn *db.Connection) func(string) {
 		} else {
 			formatter.PrintResult(result, os.Stdout)
 		}
-	}
-}
 
-func completer(d prompt.Document) []prompt.Suggest {
-	return []prompt.Suggest{}
+		// Trigger schema refresh for DDL/USE commands
+		upperLine := strings.ToUpper(line)
+		if strings.HasPrefix(upperLine, "USE") ||
+			strings.HasPrefix(upperLine, "CREATE") ||
+			strings.HasPrefix(upperLine, "DROP") ||
+			strings.HasPrefix(upperLine, "ALTER") {
+			go func() {
+				metadata, err := getMetadata(conn)
+				if err == nil {
+					c.UpdateSchema(metadata)
+				}
+			}()
+		}
+	}
 }
