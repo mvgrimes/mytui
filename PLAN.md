@@ -131,9 +131,9 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
    - Add shell redirects ($>, $>>, $|)
 
 10. **Key Bindings and Editor Integration**
-    - Port key binding system
-    - Add external editor support
-    - Implement prettify/unprettify commands
+     - [x] Port key binding system (Vim mode)
+     - [ ] Add external editor support
+     - [ ] Implement prettify/unprettify commands
 
 ### Phase 4: Polish and Testing
 

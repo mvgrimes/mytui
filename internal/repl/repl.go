@@ -10,10 +10,12 @@ import (
 	"github.com/mvgrimes/mycli-go/internal/completion"
 	"github.com/mvgrimes/mycli-go/internal/db"
 	"github.com/mvgrimes/mycli-go/internal/formatter"
+	"github.com/mvgrimes/mycli-go/internal/vim"
 )
 
 func RunREPL(conn *db.Connection) {
 	c := completion.NewCompleter()
+	v := vim.NewVimState()
 
 	// Initial schema fetch
 	metadata, err := getMetadata(conn)
@@ -35,9 +37,12 @@ func RunREPL(conn *db.Connection) {
 	p := prompt.New(
 		executor(conn, c),
 		c.Complete,
-		prompt.OptionPrefix("mysql> "),
 		prompt.OptionTitle("mycli"),
 		prompt.OptionHistory([]string{}),
+		prompt.OptionSwitchKeyBindMode(prompt.CommonKeyBind),
+		prompt.OptionAddKeyBind(v.GetKeyBindings()...),
+		prompt.OptionAddASCIICodeBind(v.GetASCIICodeBindings()...),
+		prompt.OptionLivePrefix(v.GetLivePrefix()),
 	)
 	p.Run()
 }
