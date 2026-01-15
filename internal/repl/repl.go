@@ -1,13 +1,16 @@
 package repl
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/c-bata/go-prompt"
 	"github.com/mvgrimes/mycli-go/internal/completion"
+	"github.com/mvgrimes/mycli-go/internal/config"
 	"github.com/mvgrimes/mycli-go/internal/db"
 	"github.com/mvgrimes/mycli-go/internal/formatter"
 	"github.com/mvgrimes/mycli-go/internal/vim"
@@ -18,19 +21,26 @@ type REPL struct {
 	completer     *completion.Completer
 	vimState      *vim.VimState
 	currentFormat formatter.Format
+	lastQuery     string
+	config        *config.Config
+	history       []string
 }
 
-func NewREPL(conn *db.Connection) *REPL {
-	return &REPL{
+func NewREPL(conn *db.Connection, cfg *config.Config) *REPL {
+	r := &REPL{
 		conn:          conn,
 		completer:     completion.NewCompleter(),
 		vimState:      vim.NewVimState(),
-		currentFormat: formatter.FormatTable,
+		currentFormat: formatter.Format(cfg.TableFormat),
+		config:        cfg,
+		history:       loadHistory(cfg.HistoryFile),
 	}
+	r.completer.SmartCompletion = cfg.SmartCompletion
+	return r
 }
 
-func RunREPL(conn *db.Connection) {
-	r := NewREPL(conn)
+func RunREPL(conn *db.Connection, cfg *config.Config) {
+	r := NewREPL(conn, cfg)
 
 	// Initial schema fetch
 	metadata, err := getMetadata(conn)
@@ -49,20 +59,100 @@ func RunREPL(conn *db.Connection) {
 		}
 	}()
 
+	livePrefix := func() (string, bool) {
+		base := r.formatPrompt()
+		if r.config.KeyBindings == "vim" {
+			if r.vimState.Mode == vim.NormalMode {
+				return "(normal) " + base, true
+			}
+		}
+		return base, true
+	}
+
+	options := []prompt.Option{
+		prompt.OptionTitle("mycli"),
+		prompt.OptionHistory(r.history),
+		prompt.OptionLivePrefix(livePrefix),
+	}
+
+	if r.config.KeyBindings == "vim" {
+		options = append(options,
+			prompt.OptionSwitchKeyBindMode(prompt.CommonKeyBind),
+			prompt.OptionAddKeyBind(r.vimState.GetKeyBindings()...),
+			prompt.OptionAddASCIICodeBind(r.vimState.GetASCIICodeBindings()...),
+		)
+	}
+
 	p := prompt.New(
 		r.executor,
 		r.completer.Complete,
-		prompt.OptionTitle("mycli"),
-		prompt.OptionHistory([]string{}),
-		prompt.OptionSwitchKeyBindMode(prompt.CommonKeyBind),
-		prompt.OptionAddKeyBind(r.vimState.GetKeyBindings()...),
-		prompt.OptionAddASCIICodeBind(r.vimState.GetASCIICodeBindings()...),
-		prompt.OptionLivePrefix(r.vimState.GetLivePrefix()),
+		options...,
 	)
 	p.Run()
 }
 
+func loadHistory(filename string) []string {
+	var history []string
+	file, err := os.Open(filename)
+	if err != nil {
+		return history
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.TrimSpace(line) != "" {
+			history = append(history, line)
+		}
+	}
+	return history
+}
+
+func (r *REPL) saveToHistory(line string) {
+	if strings.TrimSpace(line) == "" {
+		return
+	}
+
+	f, err := os.OpenFile(r.config.HistoryFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	if _, err := f.WriteString(line + "\n"); err != nil {
+		return
+	}
+}
+
+func (r *REPL) formatPrompt() string {
+	p := r.config.Prompt
+	now := time.Now()
+
+	// Replace tokens
+	p = strings.ReplaceAll(p, "\\D", now.Format("Mon Jan 2 15:04:05 2006"))
+	p = strings.ReplaceAll(p, "\\d", r.conn.GetCurrentDatabase())
+	p = strings.ReplaceAll(p, "\\h", r.conn.Config.Host)
+	p = strings.ReplaceAll(p, "\\m", now.Format("04"))
+	p = strings.ReplaceAll(p, "\\n", "\n")
+	p = strings.ReplaceAll(p, "\\P", now.Format("PM"))
+	p = strings.ReplaceAll(p, "\\p", fmt.Sprintf("%d", r.conn.Config.Port))
+	p = strings.ReplaceAll(p, "\\R", now.Format("15"))
+	p = strings.ReplaceAll(p, "\\r", now.Format("03"))
+	p = strings.ReplaceAll(p, "\\s", now.Format("05"))
+	p = strings.ReplaceAll(p, "\\u", r.conn.Config.User)
+
+	// Handle product type (\t) - for now just MySQL
+	p = strings.ReplaceAll(p, "\\t", "mysql")
+
+	// Handle ANSI escape sequences (\x1b)
+	p = strings.ReplaceAll(p, "\\x1b", "\x1b")
+
+	return p
+}
+
 func getMetadata(conn *db.Connection) (map[string][]string, error) {
+
 	tables, err := conn.GetTables()
 	if err != nil {
 		return nil, err
@@ -83,6 +173,9 @@ func (r *REPL) executor(line string) {
 	if line == "" {
 		return
 	}
+
+	// Save to history file
+	r.saveToHistory(line)
 
 	// Handle special commands
 	if strings.HasPrefix(line, "\\") {
@@ -106,6 +199,7 @@ func (r *REPL) executor(line string) {
 	}
 
 	// Execute query
+	r.lastQuery = line
 	result, err := r.conn.ExecuteQuery(line)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -113,7 +207,7 @@ func (r *REPL) executor(line string) {
 	}
 
 	// Display results
-	formatter.PrintResult(result, os.Stdout, format)
+	formatter.PrintResult(result, os.Stdout, format, r.config)
 
 	// Trigger schema refresh for DDL/USE commands
 	upperLine := strings.ToUpper(line)
@@ -152,7 +246,63 @@ func (r *REPL) handleSpecialCommand(line string) {
 		default:
 			fmt.Printf("Unknown format: %s\n", newFormat)
 		}
+	case "\\e":
+		r.openExternalEditor()
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 	}
+}
+
+func (r *REPL) openExternalEditor() {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = os.Getenv("VISUAL")
+	}
+	if editor == "" {
+		editor = "vi" // Default to vi
+	}
+
+	tempFile, err := os.CreateTemp("", "mycli-*.sql")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating temp file: %v\n", err)
+		return
+	}
+	defer os.Remove(tempFile.Name())
+
+	if r.lastQuery != "" {
+		if _, err := tempFile.WriteString(r.lastQuery); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing to temp file: %v\n", err)
+		}
+	}
+	tempFile.Close()
+
+	cmd := exec.Command("sh", "-c", editor+" "+tempFile.Name())
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err = cmd.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running editor: %v\n", err)
+		return
+	}
+
+	content, err := os.ReadFile(tempFile.Name())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading temp file: %v\n", err)
+		return
+	}
+
+	query := strings.TrimSpace(string(content))
+	if query == "" {
+		return
+	}
+
+	fmt.Printf("Executing: %s\n", query)
+	result, err := r.conn.ExecuteQuery(query)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return
+	}
+	formatter.PrintResult(result, os.Stdout, r.currentFormat, r.config)
 }

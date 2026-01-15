@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mvgrimes/mycli-go/internal/config"
 	"github.com/mvgrimes/mycli-go/internal/db"
 	"github.com/mvgrimes/mycli-go/internal/repl"
 	"github.com/spf13/cobra"
@@ -65,7 +66,18 @@ func runREPL(cmd *cobra.Command, args []string) error {
 	sslCert, _ := cmd.Flags().GetString("ssl-cert")
 	sslKey, _ := cmd.Flags().GetString("ssl-key")
 
-	config := db.Config{
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not load config: %v\n", err)
+		cfg = &config.Config{
+			TableFormat: "table",
+			SyntaxStyle: "monokai",
+			KeyBindings: "vim",
+			HistoryFile: "/tmp/mycli_history",
+		}
+	}
+
+	dbConfig := db.Config{
 		Host:     host,
 		Port:     port,
 		User:     user,
@@ -80,7 +92,7 @@ func runREPL(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Connecting to MySQL at %s:%d as user %s...\n", host, port, user)
-	conn, err := db.NewConnection(config)
+	conn, err := db.NewConnection(dbConfig)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %v", err)
 	}
@@ -91,6 +103,6 @@ func runREPL(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Connected! Server version: %s\n", serverVersion)
 	}
 
-	repl.RunREPL(conn)
+	repl.RunREPL(conn, cfg)
 	return nil
 }

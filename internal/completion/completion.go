@@ -20,6 +20,7 @@ var sqlKeywords = []string{
 var specialCommands = []prompt.Suggest{
 	{Text: "\\f", Description: "Change output format"},
 	{Text: "\\q", Description: "Quit"},
+	{Text: "\\e", Description: "Open external editor"},
 }
 
 var formatTypes = []prompt.Suggest{
@@ -31,10 +32,11 @@ var formatTypes = []prompt.Suggest{
 }
 
 type Completer struct {
-	keywords []prompt.Suggest
-	tables   []prompt.Suggest
-	columns  []prompt.Suggest
-	metadata map[string][]string // table name -> columns
+	keywords        []prompt.Suggest
+	tables          []prompt.Suggest
+	columns         []prompt.Suggest
+	metadata        map[string][]string // table name -> columns
+	SmartCompletion bool
 }
 
 func NewCompleter() *Completer {
@@ -44,13 +46,14 @@ func NewCompleter() *Completer {
 	}
 
 	return &Completer{
-		keywords: suggestions,
-		metadata: make(map[string][]string),
+		keywords:        suggestions,
+		metadata:        make(map[string][]string),
+		SmartCompletion: true,
 	}
 }
 
 func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
-	// Manual word extraction using only whitespace as separators
+	// ... (word extraction part)
 	lineBefore := d.TextBeforeCursor()
 	word := ""
 	if lineBefore != "" {
@@ -68,6 +71,7 @@ func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
 
 	// 0. Handle special commands: \f
 	if strings.HasPrefix(lineBefore, "\\") {
+		// ... (special command handling)
 		parts := strings.Fields(lineBefore)
 		if len(parts) == 0 {
 			return specialCommands
@@ -87,6 +91,11 @@ func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
 	}
 
 	var suggestions []prompt.Suggest
+
+	if !c.SmartCompletion {
+		suggestions = append(suggestions, c.keywords...)
+		return prompt.FilterHasPrefix(suggestions, word, true)
+	}
 
 	// 1. Handle aliased/table qualified columns: "SELECT t.^" or "WHERE alias.^"
 	if strings.Contains(word, ".") {

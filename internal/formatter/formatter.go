@@ -13,6 +13,7 @@ import (
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/fatih/color"
 	runewidth "github.com/mattn/go-runewidth"
+	"github.com/mvgrimes/mycli-go/internal/config"
 	"github.com/mvgrimes/mycli-go/internal/db"
 	"github.com/olekukonko/tablewriter"
 )
@@ -57,13 +58,16 @@ func FormatSQL(sql string) string {
 }
 
 // PrintResult prints the database result in the specified format
-func PrintResult(result *db.Result, out io.Writer, format Format) {
+func PrintResult(result *db.Result, out io.Writer, format Format, cfg *config.Config) {
 	var writer io.Writer = out
 	var cmd *exec.Cmd
 
 	// Use pager if results are large
 	if len(result.Rows) > 20 {
-		pager := os.Getenv("PAGER")
+		pager := cfg.Pager
+		if pager == "" {
+			pager = os.Getenv("PAGER")
+		}
 		if pager == "" {
 			pager = "less -SRXF"
 		}
@@ -98,7 +102,11 @@ func PrintResult(result *db.Result, out io.Writer, format Format) {
 		}
 	}
 
-	fmt.Fprintf(writer, "%s (%.2f sec)\n", result.Status, result.Duration.Seconds())
+	if cfg.Timing {
+		fmt.Fprintf(writer, "%s (%.2f sec)\n", result.Status, result.Duration.Seconds())
+	} else {
+		fmt.Fprintf(writer, "%s\n", result.Status)
+	}
 }
 
 func printTable(result *db.Result, out io.Writer) {

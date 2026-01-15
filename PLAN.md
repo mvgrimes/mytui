@@ -110,10 +110,9 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
    - [ ] Add auto-vertical output based on terminal width
 
 7. **Configuration System**
-   - Port myclirc configuration format
-   - Default config files should live in ~/.config/sqlcli/config (with appropriate suffix)
-   - Support for system and user config files
-   - Implement all configuration options from Python version
+   - [x] Port a subset of the myclirc configuration.
+   - [x] Support for default config files in ~/.config/sqlcli/config
+   - [x] Store queries in a history file and load into history buffer on startup
 
 ### Phase 3: Advanced Features
 
@@ -125,10 +124,8 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
    - [x] Syntax highlight the query
 
 9. **Special Commands**
-   - Implement all special commands (\u, \r, \fs, \f, etc.)
+   - Implement special commands. Start with: \clip \e \fs \f \fd \once \| \T (need to change existing \f to \T)
    - Add favorite queries with parameters
-   - Implement destructive query warnings [table this for now]
-   - Add shell redirects ($>, $>>, $|)
 
 10. **Key Bindings and Editor Integration**
      - [x] Port key binding system (Vim mode)

@@ -193,11 +193,11 @@ func (v *VimState) GetASCIICodeBindings() []prompt.ASCIICodeBind {
 	}
 }
 
-func (v *VimState) GetLivePrefix() func() (string, bool) {
+func (v *VimState) GetLivePrefix(basePrompt string) func() (string, bool) {
 	return func() (string, bool) {
 		if v.Mode == NormalMode {
-			return "(normal) mysql> ", true
+			return "(normal) " + basePrompt, true
 		}
-		return "mysql> ", true
+		return basePrompt, true
 	}
 }

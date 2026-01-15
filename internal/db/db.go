@@ -24,7 +24,8 @@ type Config struct {
 }
 
 type Connection struct {
-	db *sql.DB
+	db     *sql.DB
+	Config Config
 }
 
 func NewConnection(config Config) (*Connection, error) {
@@ -38,7 +39,7 @@ func NewConnection(config Config) (*Connection, error) {
 		return nil, err
 	}
 
-	return &Connection{db: db}, nil
+	return &Connection{db: db, Config: config}, nil
 }
 
 func buildDSN(config Config) string {
@@ -70,6 +71,15 @@ func buildDSN(config Config) string {
 
 func (c *Connection) Close() error {
 	return c.db.Close()
+}
+
+func (c *Connection) GetCurrentDatabase() string {
+	var dbName sql.NullString
+	err := c.db.QueryRow("SELECT DATABASE()").Scan(&dbName)
+	if err != nil || !dbName.Valid {
+		return "(none)"
+	}
+	return dbName.String
 }
 
 func (c *Connection) Execute(query string) (*sql.Rows, error) {
