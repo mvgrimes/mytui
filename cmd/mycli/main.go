@@ -6,6 +6,7 @@ import (
 
 	"github.com/mvgrimes/mycli-go/internal/config"
 	"github.com/mvgrimes/mycli-go/internal/db"
+	"github.com/mvgrimes/mycli-go/internal/formatter"
 	"github.com/mvgrimes/mycli-go/internal/repl"
 	"github.com/spf13/cobra"
 )
@@ -14,7 +15,7 @@ var version = "0.1.0"
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "mycli",
+		Use:   "sqlcli",
 		Short: "A MySQL terminal client with auto-completion and syntax highlighting",
 		Long: `mycli is a command line interface for MySQL and MariaDB that provides
 auto-completion, syntax highlighting, and other useful features for database
@@ -24,7 +25,7 @@ administration and development.`,
 	}
 
 	// Disable default help flag to avoid conflict with -h for host
-	rootCmd.Flags().BoolP("help", "", false, "help for mycli")
+	rootCmd.Flags().BoolP("help", "", false, "help for sqlcli")
 
 	// Connection flags
 	rootCmd.Flags().StringP("host", "h", "localhost", "Host address of the database")
@@ -44,6 +45,12 @@ administration and development.`,
 	rootCmd.Flags().String("charset", "utf8mb4", "Character set for MySQL session")
 	rootCmd.Flags().Bool("local-infile", false, "Enable/disable LOAD DATA LOCAL INFILE")
 	rootCmd.Flags().String("init-command", "", "SQL statement to execute after connecting")
+	rootCmd.Flags().StringP("prompt", "R", "", "Prompt template")
+	rootCmd.Flags().StringP("config", "c", "", "Path to config file")
+	rootCmd.Flags().StringP("execute", "e", "", "Execute a command and quit")
+
+	// Allow database as positional argument
+	rootCmd.Args = cobra.MaximumNArgs(1)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -63,16 +70,29 @@ func runREPL(cmd *cobra.Command, args []string) error {
 	sslCa, _ := cmd.Flags().GetString("ssl-ca")
 	sslCert, _ := cmd.Flags().GetString("ssl-cert")
 	sslKey, _ := cmd.Flags().GetString("ssl-key")
+	promptFlag, _ := cmd.Flags().GetString("prompt")
+	configPath, _ := cmd.Flags().GetString("config")
+	executeFlag, _ := cmd.Flags().GetString("execute")
 
-	cfg, err := config.LoadConfig()
+	// Use positional argument for database if flag is not set
+	if database == "" && len(args) > 0 {
+		database = args[0]
+	}
+
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not load config: %v\n", err)
 		cfg = &config.Config{
 			TableFormat: "table",
 			SyntaxStyle: "monokai",
 			KeyBindings: "vim",
-			HistoryFile: "/tmp/mycli_history",
+			HistoryFile: "/tmp/sqlcli_history",
 		}
+	}
+
+	// Override prompt if flag is provided
+	if promptFlag != "" {
+		cfg.Prompt = promptFlag
 	}
 
 	dbConfig := db.Config{
@@ -95,6 +115,19 @@ func runREPL(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to connect to database: %v", err)
 	}
 	defer conn.Close()
+
+	if executeFlag != "" {
+		result, err := conn.ExecuteQuery(executeFlag)
+		if err != nil {
+			return fmt.Errorf("failed to execute query: %v", err)
+		}
+		// In execute mode, we use the default format or config format
+		// No pager, no timing (unless requested? usually -e is for scripting)
+		// Let's use PrintResult with no pager override
+		// We need the formatter package
+		formatter.PrintResult(result, os.Stdout, formatter.Format(cfg.TableFormat), cfg, "")
+		return nil
+	}
 
 	serverVersion, err := conn.GetServerInfo()
 	if err == nil {

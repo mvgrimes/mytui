@@ -22,16 +22,13 @@ type Config struct {
 	AutoVerticalOutput bool              `mapstructure:"auto_vertical_output"`
 }
 
-func LoadConfig() (*Config, error) {
+func LoadConfig(customPath string) (*Config, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("could not find home directory: %v", err)
 	}
 
 	configDir := filepath.Join(home, ".config", "sqlcli")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return nil, fmt.Errorf("could not create config directory: %v", err)
-	}
 
 	viper.SetDefault("table_format", "table")
 	viper.SetDefault("syntax_style", "monokai")
@@ -45,20 +42,30 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("favorite_queries", make(map[string]string))
 	viper.SetDefault("auto_vertical_output", true)
 
-	viper.SetConfigName("config")
-	viper.SetConfigType("toml") // We'll use TOML as default for now, but viper is flexible
-	viper.AddConfigPath(configDir)
-	viper.AddConfigPath(home)
+	if customPath != "" {
+		viper.SetConfigFile(customPath)
+	} else {
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return nil, fmt.Errorf("could not create config directory: %v", err)
+		}
+		viper.SetConfigName("config")
+		viper.SetConfigType("toml")
+		viper.AddConfigPath(configDir)
+		viper.AddConfigPath(home)
+	}
+
 	viper.SetEnvPrefix("SQLCLI")
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok && customPath != "" {
 			return nil, fmt.Errorf("error reading config file: %v", err)
 		}
-		// Config file not found, use defaults and optionally create one
-		if err := viper.SafeWriteConfigAs(filepath.Join(configDir, "config.toml")); err != nil {
-			// Ignore error if it already exists, although SafeWriteConfigAs shouldn't be called if it exists
+		// If not custom path and not found, we can try to create default
+		if customPath == "" {
+			if _, err := os.Stat(filepath.Join(configDir, "config.toml")); os.IsNotExist(err) {
+				_ = viper.SafeWriteConfigAs(filepath.Join(configDir, "config.toml"))
+			}
 		}
 	}
 
