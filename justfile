@@ -1,5 +1,5 @@
 APP      := "mycli-go"
-VERSION  := `perl -nE'm{VERSION\s*=\s*"(\d+\.\d+.\d+)"} && print $1' ./cmd/mycli-go/main.go`
+VERSION  := `perl -nE'm{version\s*=\s*"(\d+\.\d+.\d+)"} && print $1' ./cmd/mycli-go/main.go`
 
 build:
   echo "Building verions {{VERSION}} of {{APP}}"
@@ -9,3 +9,8 @@ lint:
   go vet ./... || true
   golangci-lint run ./... || true
   govulncheck ./...
+
+release:
+  git diff --exit-code
+  git tag "{{VERSION}}"
+  goreleaser release --clean

@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/cobra"
+
 	"github.com/mvgrimes/mycli-go/internal/config"
 	"github.com/mvgrimes/mycli-go/internal/db"
 	"github.com/mvgrimes/mycli-go/internal/formatter"
 	"github.com/mvgrimes/mycli-go/internal/repl"
-	"github.com/spf13/cobra"
 )
 
 var version = "0.1.0"

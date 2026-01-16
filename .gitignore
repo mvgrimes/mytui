@@ -15,6 +15,9 @@ data/
 # Editor
 Session.vim
 
+# Added by goreleaser init:
+dist/
+
 # Samples
 
 # Build artifacts
