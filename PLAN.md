@@ -82,7 +82,8 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
 2. **CLI Framework Integration**
    - [x] Implement command-line argument parsing
    - [x] Add basic connection options (host, port, user, password, database)
-   - [ ] Support for DSN and config files
+   - [x] Support for config files and execute mode (-e)
+   - [ ] Support for DSN
 
 3. **Database Connection Layer**
    - [x] Implement basic MySQL/MariaDB connection
@@ -126,11 +127,13 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
 9. **Special Commands**
    - [x] Implement special commands: \clip \e \fs \f \fd \once \| \T
    - [x] Add favorite queries with parameters
+   - [ ] Implement destructive query warnings (table this for now)
+   - [ ] Add shell redirects ($>, $>>, $|) (table this for now)
 
 10. **Key Bindings and Editor Integration**
-      - [x] Port key binding system (Vim mode)
-      - [x] Add external editor support (\e)
-      - [ ] Implement prettify/unprettify commands
+   - [x] Port key binding system (Vim mode)
+   - [x] Add external editor support (\e)
+   - [ ] Implement prettify/unprettify commands
 
 
 ### Phase 4: Polish and Testing
