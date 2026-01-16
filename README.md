@@ -26,7 +26,7 @@ A command-line client for MySQL and MariaDB with auto-completion and syntax high
 *   **Vim Mode**: Full Vim-style keybindings in the REPL (Normal/Insert modes).
 *   **External Editor**: Open your current query in your favorite editor with `\e`.
 *   **Clipboard Integration**: Quickly copy query results to your system clipboard with `\clip`.
-*   **Configuration**: Highly customizable via `~/.config/sqlcli/config.toml`.
+*   **Configuration**: Highly customizable via `~/.config/mycli-go/config.toml`.
 *   **Pager Support**: Automatic paging for large result sets using your system's `PAGER` (defaulting to `less`).
 *   **SSL Support**: Secure connections to your database instances.
 
@@ -37,7 +37,7 @@ A command-line client for MySQL and MariaDB with auto-completion and syntax high
 Ensure you have Go installed (1.24 or later), then run:
 
 ```bash
-go install github.com/mvgrimes/mycli-go/cmd/sqlcli@latest
+go install github.com/mvgrimes/mycli-go/cmd/mycli-go@latest
 ```
 
 Alternatively, clone the repository and build it manually:
@@ -45,7 +45,7 @@ Alternatively, clone the repository and build it manually:
 ```bash
 git clone https://github.com/mvgrimes/mycli-go.git
 cd mycli-go
-go build -o sqlcli ./cmd/sqlcli
+go build -o mycli-go ./cmd/mycli-go
 ```
 
 ## Usage
@@ -53,19 +53,19 @@ go build -o sqlcli ./cmd/sqlcli
 Connect to a database:
 
 ```bash
-sqlcli -h localhost -u root -p mypassword -D mydatabase
+mycli-go -h localhost -u root -p mypassword -D mydatabase
 ```
 
 Or using the positional argument for the database:
 
 ```bash
-sqlcli -u root mydatabase
+mycli-go -u root mydatabase
 ```
 
 Execute a query and quit:
 
 ```bash
-sqlcli -e "SELECT * FROM users LIMIT 10" mydatabase
+mycli-go -e "SELECT * FROM users LIMIT 10" mydatabase
 ```
 
 ### Special Commands
@@ -84,7 +84,7 @@ sqlcli -e "SELECT * FROM users LIMIT 10" mydatabase
 
 ## Configuration
 
-On first launch, a default configuration file is created at `~/.config/sqlcli/config.toml`. You can customize your prompt, default table format, syntax highlighting theme, and more.
+On first launch, a default configuration file is created at `~/.config/mycli-go/config.toml`. You can customize your prompt, default table format, syntax highlighting theme, and more.
 
 ## License
 

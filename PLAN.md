@@ -112,7 +112,7 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
 
 7. **Configuration System**
    - [x] Port a subset of the myclirc configuration.
-   - [x] Support for default config files in ~/.config/sqlcli/config
+   - [x] Support for default config files in ~/.config/mysqli-go/config
    - [x] Store queries in a history file and load into history buffer on startup
 
 ### Phase 3: Advanced Features

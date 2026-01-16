@@ -15,7 +15,7 @@ var version = "0.1.0"
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "sqlcli",
+		Use:   "mycli-go",
 		Short: "A MySQL terminal client with auto-completion and syntax highlighting",
 		Long: `mycli is a command line interface for MySQL and MariaDB that provides
 auto-completion, syntax highlighting, and other useful features for database
@@ -25,7 +25,7 @@ administration and development.`,
 	}
 
 	// Disable default help flag to avoid conflict with -h for host
-	rootCmd.Flags().BoolP("help", "", false, "help for sqlcli")
+	rootCmd.Flags().BoolP("help", "", false, "help for mycli-go")
 
 	// Connection flags
 	rootCmd.Flags().StringP("host", "h", "localhost", "Host address of the database")
@@ -86,7 +86,7 @@ func runREPL(cmd *cobra.Command, args []string) error {
 			TableFormat: "table",
 			SyntaxStyle: "monokai",
 			KeyBindings: "vim",
-			HistoryFile: "/tmp/sqlcli_history",
+			HistoryFile: "/tmp/mycli-go_history",
 		}
 	}
 

@@ -73,7 +73,7 @@ func RunREPL(conn *db.Connection, cfg *config.Config) {
 	}
 
 	options := []prompt.Option{
-		prompt.OptionTitle("sqlcli"),
+		prompt.OptionTitle("mycli-go"),
 		prompt.OptionHistory(r.history),
 		prompt.OptionLivePrefix(livePrefix),
 	}
@@ -265,7 +265,7 @@ func (r *REPL) openExternalEditor() {
 		editor = "vi" // Default to vi
 	}
 
-	tempFile, err := os.CreateTemp("", "sqlcli-*.sql")
+	tempFile, err := os.CreateTemp("", "mycli-go-*.sql")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating temp file: %v\n", err)
 		return

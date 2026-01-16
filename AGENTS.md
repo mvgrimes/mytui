@@ -15,7 +15,7 @@ The project is structured into several internal packages:
 -   `internal/completion`: Implements context-aware SQL auto-completion. It handles keywords, tables, and columns, including alias resolution (e.g., `u.id` -> `users.id`).
 -   `internal/formatter`: Responsible for rendering query results in various formats (`table`, `unicode`, `vertical`, `csv`, `tsv`). It uses `tablewriter` for tabular output.
 -   `internal/special`: Handles backslash commands (e.g., `\T`, `\f`, `\clip`, `\e`).
--   `internal/config`: Manages user configuration using `viper`. Config is stored in `~/.config/sqlcli/config.toml`.
+-   `internal/config`: Manages user configuration using `viper`. Config is stored in `~/.config/mycli-go/config.toml`.
 -   `internal/vim`: Implements the Vim-style keybinding state machine.
 
 ## Technical Stack
