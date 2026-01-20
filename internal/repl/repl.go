@@ -167,7 +167,9 @@ func (r *REPL) formatPrompt() string {
 	p = strings.ReplaceAll(p, "\\033", "\x1b")
 	p = strings.ReplaceAll(p, "\\e", "\x1b")
 
-	return p
+	// Strip ANSI codes to avoid width calculation bugs in go-prompt
+	re := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	return re.ReplaceAllString(p, "")
 }
 
 func getMetadata(conn *db.Connection) (map[string][]string, error) {
