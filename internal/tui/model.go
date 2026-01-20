@@ -134,6 +134,8 @@ func NewModel(conn *db.Connection, cfg *config.Config) Model {
 	ta.SetWidth(80)
 	ta.SetHeight(3)
 	ta.Cursor.SetMode(cursor.CursorStatic)
+	ta.Prompt = ""
+	ta.ShowLineNumbers = false
 
 	vp := viewport.New(80, 20)
 	vp.SetContent("Welcome to mycli-go!")

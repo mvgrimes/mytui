@@ -499,8 +499,10 @@ func (m Model) getStyleForToken(t chroma.TokenType) lipgloss.Style {
 
 func (m Model) renderQueryArea() string {
 	val := m.textarea.Value()
+	isPlaceholder := false
 	if val == "" {
-		return m.textarea.View()
+		val = m.textarea.Placeholder
+		isPlaceholder = true
 	}
 
 	lines := strings.Split(val, "\n")
@@ -509,8 +511,25 @@ func (m Model) renderQueryArea() string {
 
 	var b strings.Builder
 	for i, line := range lines {
-		displayLine := line
-		if i == curLineIdx && m.textarea.Focused() {
+		displayLine := ""
+		if isPlaceholder {
+			placeholderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
+			if i == 0 && m.textarea.Focused() {
+				// Show cursor at start of placeholder
+				cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF")).Foreground(lipgloss.Color("#000000"))
+				if m.vimState.Mode == vim.NormalMode {
+					cursorStyle = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC")).Foreground(lipgloss.Color("#000000"))
+				}
+				runes := []rune(line)
+				if len(runes) > 0 {
+					displayLine = cursorStyle.Render(string(runes[0])) + placeholderStyle.Render(string(runes[1:]))
+				} else {
+					displayLine = cursorStyle.Render(" ")
+				}
+			} else {
+				displayLine = placeholderStyle.Render(line)
+			}
+		} else if i == curLineIdx && m.textarea.Focused() {
 			runes := []rune(line)
 			before := ""
 			cursorChar := " "
@@ -540,7 +559,7 @@ func (m Model) renderQueryArea() string {
 		b.WriteString(fmt.Sprintf("%2d | %s\n", i+1, displayLine))
 	}
 
-	if m.lastError != nil {
+	if m.lastError != nil && !isPlaceholder {
 		padding := m.lastError.Col + 5
 		b.WriteString(strings.Repeat(" ", padding) + lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render("^ "+m.lastError.Message) + "\n")
 	}
@@ -580,8 +599,7 @@ func (m Model) View() string {
 		userStyle.Render(user),
 		atStyle.Render("@"),
 		hostStyle.Render(host),
-		restStyle.Render(fmt.Sprintf(":%d/%s", port, database)),
-		atStyle.Render(" "),
+		restStyle.Render(fmt.Sprintf(":%d/%s ", port, database)),
 	)
 
 	mode := " INSERT "
