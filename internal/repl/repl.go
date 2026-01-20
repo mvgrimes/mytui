@@ -76,6 +76,7 @@ func RunREPL(conn *db.Connection, cfg *config.Config) {
 		prompt.OptionTitle("mycli-go"),
 		prompt.OptionHistory(r.history),
 		prompt.OptionLivePrefix(livePrefix),
+		prompt.OptionPrefixTextColor(prompt.Cyan),
 		prompt.OptionAddKeyBind(prompt.KeyBind{
 			Key: prompt.ControlW,
 			Fn: func(buf *prompt.Buffer) {
