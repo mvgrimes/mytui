@@ -90,6 +90,12 @@ func RunREPL(conn *db.Connection, cfg *config.Config) {
 				buf.DeleteBeforeCursor(len([]rune(buf.Document().TextBeforeCursor())))
 			},
 		}),
+		prompt.OptionAddKeyBind(prompt.KeyBind{
+			Key: prompt.ControlN,
+			Fn: func(buf *prompt.Buffer) {
+				// History mapping
+			},
+		}),
 	}
 
 	if r.config.KeyBindings == "vim" {
