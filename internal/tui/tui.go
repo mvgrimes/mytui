@@ -6,9 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/lexers"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mvgrimes/mycli-go/internal/formatter"
+	"github.com/mvgrimes/mycli-go/internal/parser"
 	"github.com/mvgrimes/mycli-go/internal/special"
 	"github.com/mvgrimes/mycli-go/internal/vim"
 )
@@ -45,6 +48,30 @@ func (m Model) Init() tea.Cmd {
 	return nil
 }
 
+func (m *Model) saveToHistory(line string) {
+	if strings.TrimSpace(line) == "" {
+		return
+	}
+
+	// Update in-memory
+	m.history = append(m.history, line)
+	m.historyIndex = len(m.history)
+
+	// Update file
+	now := time.Now().Format("2006-01-02 15:04:05")
+	f, err := os.OpenFile(m.config.HistoryFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	fmt.Fprintf(f, "# %s\n", now)
+	lines := strings.Split(line, "\n")
+	for _, l := range lines {
+		fmt.Fprintf(f, "+%s\n", l)
+	}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		tiCmd tea.Cmd
@@ -73,11 +100,55 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		if m.showSuggestions {
+			switch msg.String() {
+			case "up", "k", "shift+tab":
+				if m.suggestionIndex > 0 {
+					m.suggestionIndex--
+				} else {
+					m.suggestionIndex = len(m.suggestions) - 1
+				}
+			case "down", "j", "tab":
+				if m.suggestionIndex < len(m.suggestions)-1 {
+					m.suggestionIndex++
+				} else {
+					m.suggestionIndex = 0
+				}
+			case "enter":
+				m.applySuggestion()
+				m.showSuggestions = false
+			case "esc", "ctrl+ ", "ctrl+space":
+				m.showSuggestions = false
+			}
+			return m, nil
+		}
+
 		switch msg.Type {
 		case tea.KeyCtrlK:
 			m.showMenu = true
 			m.menuIndex = 0
 			return m, nil
+		case tea.KeyCtrlP:
+			if m.focus == FocusQuery {
+				if m.historyIndex > 0 {
+					m.historyIndex--
+					m.textarea.SetValue(m.history[m.historyIndex])
+					m.textarea.CursorEnd()
+				}
+				return m, nil
+			}
+		case tea.KeyCtrlN:
+			if m.focus == FocusQuery {
+				if m.historyIndex < len(m.history)-1 {
+					m.historyIndex++
+					m.textarea.SetValue(m.history[m.historyIndex])
+					m.textarea.CursorEnd()
+				} else if m.historyIndex == len(m.history)-1 {
+					m.historyIndex++
+					m.textarea.Reset()
+				}
+				return m, nil
+			}
 		case tea.KeyCtrlC:
 			return m, tea.Quit
 		case tea.KeyCtrlD:
@@ -94,8 +165,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.textarea.Focus()
 			}
 
-		case tea.KeyCtrlP:
-			if m.focus == FocusQuery {
+		case tea.KeyUp:
+			if m.focus == FocusQuery && m.vimState.Mode == vim.NormalMode {
+				m.textarea.CursorUp()
+				return m, nil
+			}
+			if m.focus == FocusQuery && m.vimState.Mode == vim.InsertMode {
 				if m.historyIndex > 0 {
 					m.historyIndex--
 					m.textarea.SetValue(m.history[m.historyIndex])
@@ -104,8 +179,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-		case tea.KeyCtrlN:
-			if m.focus == FocusQuery {
+		case tea.KeyDown:
+			if m.focus == FocusQuery && m.vimState.Mode == vim.NormalMode {
+				m.textarea.CursorDown()
+				return m, nil
+			}
+			if m.focus == FocusQuery && m.vimState.Mode == vim.InsertMode {
 				if m.historyIndex < len(m.history)-1 {
 					m.historyIndex++
 					m.textarea.SetValue(m.history[m.historyIndex])
@@ -114,6 +193,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.historyIndex++
 					m.textarea.Reset()
 				}
+				return m, nil
+			}
+		default:
+			// Many terminals send NUL for Ctrl+Space
+			if msg.Type == tea.KeyCtrlAt || (msg.Type == tea.KeySpace && msg.Alt) || msg.String() == "ctrl+ " || msg.String() == "ctrl+space" {
+				m.showSuggestions = true
+				m.suggestionIndex = 0
+				m.updateSuggestions()
 				return m, nil
 			}
 		}
@@ -210,10 +297,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// Delete current line
 						m.textarea.CursorStart()
 						m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-						// If there's a line below, delete the newline character too
-						// But textarea' Ctrl+K might not delete the line itself if it's empty?
-						// Actually, if we are at start of line, Ctrl+K deletes the whole line content.
-						// We might need to delete the line break if we want true 'dd'.
 						m.vimPendingKey = ""
 					} else {
 						m.vimPendingKey = "d"
@@ -241,12 +324,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			} else {
-
 				// Insert Mode
 				if msg.Type == tea.KeyEsc {
 					m.vimState.Mode = vim.NormalMode
-					// Don't blur, just stay focused so cursor shows.
-					// We'll handle keys above.
 					return m, nil
 				}
 				if msg.Type == tea.KeyEnter || msg.Type == tea.KeyCtrlJ {
@@ -273,15 +353,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.focus == FocusQuery && m.vimState.Mode == vim.InsertMode {
+		oldVal := m.textarea.Value()
 		m.textarea, tiCmd = m.textarea.Update(msg)
+		if m.textarea.Value() != oldVal {
+			m.lastError = parser.Validate(m.textarea.Value())
+		}
 	} else if m.focus == FocusQuery && m.vimState.Mode == vim.NormalMode {
-		// Update textarea with non-key messages even in normal mode to keep cursor blinking
 		if _, ok := msg.(tea.KeyMsg); !ok {
 			m.textarea, tiCmd = m.textarea.Update(msg)
 		}
 	}
 
-	// Always update viewports for non-key messages or if focused
 	_, isKey := msg.(tea.KeyMsg)
 	if !isKey || m.focus == FocusResults {
 		m.headerViewport, _ = m.headerViewport.Update(msg)
@@ -298,7 +380,6 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	// Handle special commands
 	m.specialOutput.Reset()
 	if special.Handle(trimmedQuery, &m) {
 		m.headerViewport.SetContent("")
@@ -306,7 +387,6 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 		m.viewport.SetContent(m.specialOutput.String())
 		m.viewport.Height = m.height - 6 - m.headerViewport.Height
 		m.textarea.Reset()
-		// Leave focus in query window for special commands
 		m.saveToHistory(query)
 		return m, nil
 	}
@@ -322,7 +402,6 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 		query = strings.TrimSuffix(trimmedQuery, "\\G")
 	}
 
-	// Save to history
 	m.saveToHistory(query)
 	m.lastQuery = query
 
@@ -330,11 +409,9 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 	if err != nil {
 		m.headerViewport.SetContent("")
 		m.headerViewport.Height = 0
-		// Wrap error message
 		wrappedError := lipgloss.NewStyle().Width(m.width - 2).Render(fmt.Sprintf("Error: %v", err))
 		m.viewport.SetContent(wrappedError)
 		m.viewport.Height = m.height - 6 - m.headerViewport.Height
-		// Keep focus in query and stay in insert mode
 		return m, nil
 	} else {
 		fullResult := formatter.FormatResult(result, format, m.config)
@@ -359,28 +436,93 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) saveToHistory(line string) {
-	if strings.TrimSpace(line) == "" {
-		return
+func (m Model) renderHighlightedText(text string) string {
+	lexer := lexers.Get("sql")
+	if lexer == nil {
+		lexer = lexers.Fallback
 	}
-
-	// Update in-memory
-	m.history = append(m.history, line)
-	m.historyIndex = len(m.history)
-
-	// Update file
-	now := time.Now().Format("2006-01-02 15:04:05")
-	f, err := os.OpenFile(m.config.HistoryFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	iterator, err := lexer.Tokenise(nil, text)
 	if err != nil {
-		return
+		return text
 	}
-	defer f.Close()
 
-	fmt.Fprintf(f, "# %s\n", now)
-	lines := strings.Split(line, "\n")
-	for _, l := range lines {
-		fmt.Fprintf(f, "+%s\n", l)
+	var b strings.Builder
+	for _, tok := range iterator.Tokens() {
+		style := m.getStyleForToken(tok.Type)
+		b.WriteString(style.Render(tok.Value))
 	}
+	return b.String()
+}
+
+func (m Model) getStyleForToken(t chroma.TokenType) lipgloss.Style {
+	s := lipgloss.NewStyle()
+	switch t {
+	case chroma.Keyword, chroma.KeywordReserved, chroma.KeywordType:
+		return s.Foreground(lipgloss.Color("#00AAFF")).Bold(true)
+	case chroma.String, chroma.StringSingle, chroma.StringDouble:
+		return s.Foreground(lipgloss.Color("#00FF88"))
+	case chroma.Number, chroma.NumberInteger, chroma.NumberFloat:
+		return s.Foreground(lipgloss.Color("#FF8800"))
+	case chroma.Comment, chroma.CommentSingle, chroma.CommentMultiline:
+		return s.Foreground(lipgloss.Color("#666666")).Italic(true)
+	case chroma.NameLabel, chroma.NameVariable:
+		return s.Foreground(lipgloss.Color("#CC88FF"))
+	case chroma.Operator, chroma.Punctuation:
+		return s.Foreground(lipgloss.Color("#AAAAAA"))
+	default:
+		return s.Foreground(lipgloss.Color("#FFFFFF"))
+	}
+}
+
+func (m Model) renderQueryArea() string {
+	val := m.textarea.Value()
+	if val == "" {
+		return m.textarea.View()
+	}
+
+	lines := strings.Split(val, "\n")
+	curLineIdx := m.textarea.Line()
+	curColIdx := m.textarea.LineInfo().ColumnOffset
+
+	var b strings.Builder
+	for i, line := range lines {
+		displayLine := line
+		if i == curLineIdx && m.textarea.Focused() {
+			runes := []rune(line)
+			before := ""
+			cursorChar := " "
+			after := ""
+
+			if curColIdx < len(runes) {
+				before = string(runes[:curColIdx])
+				cursorChar = string(runes[curColIdx])
+				after = string(runes[curColIdx+1:])
+			} else {
+				before = line
+			}
+
+			hBefore := m.renderHighlightedText(before)
+			hAfter := m.renderHighlightedText(after)
+
+			cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF")).Foreground(lipgloss.Color("#000000"))
+			if m.vimState.Mode == vim.NormalMode {
+				cursorStyle = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC")).Foreground(lipgloss.Color("#000000"))
+			}
+
+			displayLine = hBefore + cursorStyle.Render(cursorChar) + hAfter
+		} else {
+			displayLine = m.renderHighlightedText(line)
+		}
+
+		b.WriteString(fmt.Sprintf("%2d | %s\n", i+1, displayLine))
+	}
+
+	if m.lastError != nil {
+		padding := m.lastError.Col + 5
+		b.WriteString(strings.Repeat(" ", padding) + lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render("^ "+m.lastError.Message) + "\n")
+	}
+
+	return b.String()
 }
 
 func (m Model) View() string {
@@ -428,22 +570,101 @@ func (m Model) View() string {
 		modeStyle.Render(mode),
 	)
 
+	queryView := m.renderQueryArea()
+
 	view := lipgloss.JoinVertical(lipgloss.Left,
 		tHeader,
 		m.headerViewport.View(),
 		m.viewport.View(),
 		qHeader,
-		m.textarea.View(),
+		queryView,
 		statusLine,
 	)
 
+	if m.showSuggestions {
+		overlay := m.renderSuggestions()
+		h_s := lipgloss.Height(overlay)
+
+		// Create a temporary shrunken viewport
+		origHeight := m.viewport.Height
+		m.viewport.Height -= h_s
+		if m.viewport.Height < 0 {
+			m.viewport.Height = 0
+		}
+		shrunkenViewport := m.viewport.View()
+		m.viewport.Height = origHeight
+
+		// Align overlay with cursor column
+		curColIdx := m.textarea.LineInfo().ColumnOffset
+		leftMargin := 5 + curColIdx
+		w_s := lipgloss.Width(overlay)
+		if leftMargin+w_s > m.width {
+			leftMargin = m.width - w_s
+		}
+		if leftMargin < 0 {
+			leftMargin = 0
+		}
+		alignedOverlay := lipgloss.NewStyle().PaddingLeft(leftMargin).Render(overlay)
+
+		return lipgloss.JoinVertical(lipgloss.Left,
+			tHeader,
+			m.headerViewport.View(),
+			shrunkenViewport,
+			alignedOverlay,
+			qHeader,
+			queryView,
+			statusLine,
+		)
+	}
+
 	if m.showMenu {
 		overlay := m.renderMenu()
-		// Overlay the menu on top of the view
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, overlay)
 	}
 
 	return view
+}
+
+func (m Model) renderSuggestions() string {
+	if len(m.suggestions) == 0 {
+		return ""
+	}
+
+	style := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Background(lipgloss.Color("#1A1A1A")).
+		Padding(0, 1)
+
+	activeStyle := style.Copy().
+		Foreground(lipgloss.Color("#000000")).
+		Background(lipgloss.Color("#00AAFF")).
+		Bold(true)
+
+	var b strings.Builder
+	start := 0
+	if m.suggestionIndex > 5 {
+		start = m.suggestionIndex - 5
+	}
+
+	for i := start; i < len(m.suggestions) && i < start+10; i++ {
+		s := m.suggestions[i]
+		line := fmt.Sprintf("%-20s %s", s.Text, s.Description)
+		if i == m.suggestionIndex {
+			b.WriteString(activeStyle.Render(line) + "\n")
+		} else {
+			b.WriteString(style.Render(line) + "\n")
+		}
+	}
+	if len(m.suggestions) > start+10 {
+		b.WriteString(style.Render("...") + "\n")
+	}
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#00AAFF")).
+		Padding(0, 1).
+		Background(lipgloss.Color("#1A1A1A")).
+		Render(strings.TrimSuffix(b.String(), "\n"))
 }
 
 func (m Model) renderMenu() string {

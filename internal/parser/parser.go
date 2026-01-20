@@ -53,6 +53,57 @@ func parseInfixGroup(reader *astutil.NodeReader, matcher astutil.NodeMatcher, ig
 	return reader.Node
 }
 
+type ParseError struct {
+	Message string
+	Line    int
+	Col     int
+}
+
+func (e *ParseError) Error() string {
+	return fmt.Sprintf("line %d, col %d: %s", e.Line+1, e.Col+1, e.Message)
+}
+
+func Validate(text string) *ParseError {
+	src := bytes.NewBuffer([]byte(text))
+	tokenizer := token.NewTokenizer(src, &dialect.GenericSQLDialect{})
+	tokens, err := tokenizer.Tokenize()
+	if err != nil {
+		// Try to extract position from error if possible, or use tokenizer's last pos
+		return &ParseError{
+			Message: err.Error(),
+			Line:    tokenizer.Line,
+			Col:     tokenizer.Col,
+		}
+	}
+
+	// Simple check for balanced parenthesis
+	stack := []token.Pos{}
+	for _, tok := range tokens {
+		if tok.Kind == token.LParen {
+			stack = append(stack, tok.From)
+		} else if tok.Kind == token.RParen {
+			if len(stack) == 0 {
+				return &ParseError{
+					Message: "Unexpected closing parenthesis",
+					Line:    tok.From.Line,
+					Col:     tok.From.Col,
+				}
+			}
+			stack = stack[:len(stack)-1]
+		}
+	}
+	if len(stack) > 0 {
+		last := stack[len(stack)-1]
+		return &ParseError{
+			Message: "Unclosed parenthesis",
+			Line:    last.Line,
+			Col:     last.Col,
+		}
+	}
+
+	return nil
+}
+
 func Parse(text string) (ast.TokenList, error) {
 	src := bytes.NewBuffer([]byte(text))
 	p, err := NewParser(src, &dialect.GenericSQLDialect{})

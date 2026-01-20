@@ -18,6 +18,7 @@ import (
 	"github.com/mvgrimes/mycli-go/internal/config"
 	"github.com/mvgrimes/mycli-go/internal/db"
 	"github.com/mvgrimes/mycli-go/internal/formatter"
+	"github.com/mvgrimes/mycli-go/internal/parser"
 	"github.com/mvgrimes/mycli-go/internal/special"
 	"github.com/mvgrimes/mycli-go/internal/vim"
 )
@@ -53,6 +54,12 @@ type Model struct {
 
 	showMenu  bool
 	menuIndex int
+
+	showSuggestions bool
+	suggestions     []completion.Suggestion
+	suggestionIndex int
+
+	lastError *parser.ParseError
 }
 
 type MenuCommand struct {
@@ -173,6 +180,59 @@ func (m *Model) ExecuteQueryWithFormat(query string, format formatter.Format) {
 	// We use RenderResult instead of PrintResult to avoid pager in TUI
 	formatter.RenderResult(result, &m.specialOutput, format, m.config)
 	m.pagerOverride = ""
+}
+
+func (m *Model) cursorPosition() int {
+	text := m.textarea.Value()
+	lines := strings.Split(text, "\n")
+	currentRow := m.textarea.Line()
+	info := m.textarea.LineInfo()
+
+	pos := 0
+	for i := 0; i < currentRow && i < len(lines); i++ {
+		pos += len(lines[i]) + 1 // +1 for \n
+	}
+
+	// ColumnOffset is the offset in the soft-wrapped line.
+	// This is still tricky if there's wrapping.
+	// For now, let's assume it's approximately correct or we use ColumnOffset.
+	pos += info.ColumnOffset
+	return pos
+}
+
+func (m *Model) updateSuggestions() {
+	doc := completion.Document{
+		Text:           m.textarea.Value(),
+		CursorPosition: m.cursorPosition(),
+	}
+	m.suggestions = m.completer.Complete(doc)
+	if len(m.suggestions) == 0 {
+		m.showSuggestions = false
+	}
+}
+
+func (m *Model) applySuggestion() {
+	if m.suggestionIndex < 0 || m.suggestionIndex >= len(m.suggestions) {
+		return
+	}
+	s := m.suggestions[m.suggestionIndex]
+	text := m.textarea.Value()
+	pos := m.cursorPosition()
+
+	// Find the word being completed
+	start := pos
+	for start > 0 && isIdentifierChar(rune(text[start-1])) {
+		start--
+	}
+
+	newText := text[:start] + s.Text + text[pos:]
+	m.textarea.SetValue(newText)
+	// We need to set the cursor back. This is also tricky with SetCursor.
+	// m.textarea.SetCursor(start + len(s.Text))
+}
+
+func isIdentifierChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '.' || r == '`'
 }
 
 func (m *Model) UpdateCursorStyle() {
