@@ -99,7 +99,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmd := m.GetCommands()[m.menuIndex].Action(&m)
 				m.showMenu = false
 				return m, cmd
-			case "esc", "ctrl+k":
+			case "esc", "ctrl+ ", "ctrl+space":
 				m.showMenu = false
 			}
 			return m, nil
@@ -122,7 +122,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				m.applySuggestion()
 				m.showSuggestions = false
-			case "esc", "ctrl+ ", "ctrl+space":
+			case "esc", "ctrl+k":
 				m.showSuggestions = false
 			}
 			return m, nil
@@ -130,8 +130,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.Type {
 		case tea.KeyCtrlK:
-			m.showMenu = true
-			m.menuIndex = 0
+			m.showSuggestions = true
+			m.suggestionIndex = 0
+			m.updateSuggestions()
 			return m, nil
 		case tea.KeyCtrlP:
 			if m.focus == FocusQuery {
@@ -203,9 +204,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			// Many terminals send NUL for Ctrl+Space
 			if msg.Type == tea.KeyCtrlAt || (msg.Type == tea.KeySpace && msg.Alt) || msg.String() == "ctrl+ " || msg.String() == "ctrl+space" {
-				m.showSuggestions = true
-				m.suggestionIndex = 0
-				m.updateSuggestions()
+				m.showMenu = true
+				m.menuIndex = 0
 				return m, nil
 			}
 		}
