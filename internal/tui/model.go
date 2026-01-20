@@ -8,14 +8,17 @@ import (
 	"os"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mvgrimes/mycli-go/internal/completion"
 	"github.com/mvgrimes/mycli-go/internal/config"
 	"github.com/mvgrimes/mycli-go/internal/db"
 	"github.com/mvgrimes/mycli-go/internal/formatter"
+	"github.com/mvgrimes/mycli-go/internal/special"
 	"github.com/mvgrimes/mycli-go/internal/vim"
 )
 
@@ -47,6 +50,74 @@ type Model struct {
 	pagerOverride string
 	lastQuery     string
 	specialOutput bytes.Buffer
+
+	showMenu  bool
+	menuIndex int
+}
+
+type MenuCommand struct {
+	Label  string
+	Action func(*Model) tea.Cmd
+}
+
+func (m *Model) GetCommands() []MenuCommand {
+	return []MenuCommand{
+		{
+			Label: "Status (\\s)",
+			Action: func(m *Model) tea.Cmd {
+				m.specialOutput.Reset()
+				special.Handle("\\s", m)
+				m.headerViewport.SetContent("")
+				m.headerViewport.Height = 0
+				m.viewport.SetContent(m.specialOutput.String())
+				m.viewport.Height = m.height - 6 - m.headerViewport.Height
+				m.focus = FocusResults
+				m.textarea.Blur()
+				return nil
+			},
+		},
+		{
+			Label: "Copy last output to clipboard",
+			Action: func(m *Model) tea.Cmd {
+				m.specialOutput.Reset()
+				special.Handle("\\clip", m)
+				m.viewport.SetContent(m.specialOutput.String())
+				m.viewport.Height = m.height - 6 - m.headerViewport.Height
+				m.focus = FocusResults
+				m.textarea.Blur()
+				return nil
+			},
+		},
+		{
+			Label: "Copy output as CSV",
+			Action: func(m *Model) tea.Cmd {
+				if m.lastQuery == "" {
+					return nil
+				}
+				result, err := m.conn.ExecuteQuery(m.lastQuery)
+				if err != nil {
+					return nil
+				}
+				var buf bytes.Buffer
+				// Use RenderResult with FormatCSV
+				formatter.RenderResult(result, &buf, formatter.FormatCSV, m.config)
+				clipboard.WriteAll(buf.String())
+				m.specialOutput.Reset()
+				fmt.Fprintln(&m.specialOutput, "Last result copied to clipboard as CSV.")
+				m.viewport.SetContent(m.specialOutput.String())
+				m.viewport.Height = m.height - 6 - m.headerViewport.Height
+				m.focus = FocusResults
+				m.textarea.Blur()
+				return nil
+			},
+		},
+		{
+			Label: "Exit",
+			Action: func(m *Model) tea.Cmd {
+				return tea.Quit
+			},
+		},
+	}
 }
 
 func NewModel(conn *db.Connection, cfg *config.Config) Model {

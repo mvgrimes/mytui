@@ -53,7 +53,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.showMenu {
+			switch msg.String() {
+			case "up", "k":
+				if m.menuIndex > 0 {
+					m.menuIndex--
+				}
+			case "down", "j":
+				if m.menuIndex < len(m.GetCommands())-1 {
+					m.menuIndex++
+				}
+			case "enter":
+				cmd := m.GetCommands()[m.menuIndex].Action(&m)
+				m.showMenu = false
+				return m, cmd
+			case "esc", "ctrl+k":
+				m.showMenu = false
+			}
+			return m, nil
+		}
+
 		switch msg.Type {
+		case tea.KeyCtrlK:
+			m.showMenu = true
+			m.menuIndex = 0
+			return m, nil
 		case tea.KeyCtrlC:
 			return m, tea.Quit
 		case tea.KeyCtrlD:
@@ -404,7 +428,7 @@ func (m Model) View() string {
 		modeStyle.Render(mode),
 	)
 
-	return lipgloss.JoinVertical(lipgloss.Left,
+	view := lipgloss.JoinVertical(lipgloss.Left,
 		tHeader,
 		m.headerViewport.View(),
 		m.viewport.View(),
@@ -412,4 +436,49 @@ func (m Model) View() string {
 		m.textarea.View(),
 		statusLine,
 	)
+
+	if m.showMenu {
+		overlay := m.renderMenu()
+		// Overlay the menu on top of the view
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, overlay)
+	}
+
+	return view
+}
+
+func (m Model) renderMenu() string {
+	style := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Background(lipgloss.Color("#1A1A1A")).
+		Padding(0, 1)
+
+	activeStyle := style.Copy().
+		Foreground(lipgloss.Color("#000000")).
+		Background(lipgloss.Color("#00AAFF")).
+		Bold(true)
+
+	var b strings.Builder
+	b.WriteString(lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#00AAFF")).
+		Padding(0, 1).
+		Render(" COMMANDS "))
+	b.WriteString("\n\n")
+
+	commands := m.GetCommands()
+	for i, cmd := range commands {
+		line := cmd.Label
+		if i == m.menuIndex {
+			b.WriteString(activeStyle.Render(line) + "\n")
+		} else {
+			b.WriteString(style.Render(line) + "\n")
+		}
+	}
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#00AAFF")).
+		Padding(1, 1).
+		Background(lipgloss.Color("#1A1A1A")).
+		Render(b.String())
 }
