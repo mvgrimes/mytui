@@ -550,55 +550,67 @@ func (m Model) renderQueryArea() string {
 
 func (m Model) View() string {
 	m.UpdateCursorStyle()
-	status := fmt.Sprintf(" %s@%s:%d/%s ",
-		m.conn.Config.User, m.conn.Config.Host, m.conn.Config.Port, m.conn.GetCurrentDatabase())
+
+	user := m.conn.Config.User
+	host := m.conn.Config.Host
+	port := m.conn.Config.Port
+	database := m.conn.GetCurrentDatabase()
+
+	bg := lipgloss.Color("#3C3C3C")
+	userStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(bg)
+	if user == "root" {
+		userStyle = userStyle.Foreground(lipgloss.Color("#FF5555")).Bold(true)
+	}
+
+	hostStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(bg)
+	isLocal := host == "localhost" || host == "127.0.0.1" || m.conn.Config.Socket != ""
+	if !isLocal {
+		hostStyle = hostStyle.Foreground(lipgloss.Color("#FFA500"))
+	}
+
+	atStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).Background(bg)
+	restStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(bg)
+
+	statusLineStyle := lipgloss.NewStyle().
+		Background(bg).
+		Width(m.width)
+
+	statusStr := lipgloss.JoinHorizontal(lipgloss.Left,
+		" ",
+		userStyle.Render(user),
+		atStyle.Render("@"),
+		hostStyle.Render(host),
+		restStyle.Render(fmt.Sprintf(":%d/%s", port, database)),
+		atStyle.Render(" "),
+	)
 
 	mode := " INSERT "
 	if m.vimState.Mode == vim.NormalMode {
 		mode = " NORMAL "
 	}
 
-	statusBarStyle := statusStyle
-	if m.focus == FocusResults {
-		statusBarStyle = statusFocusStyle
-	}
-
-	tableHeaderStr := " [TABLE] "
-	if m.focus == FocusResults {
-		tableHeaderStr = " [TABLE] "
-	} else {
-		tableHeaderStr = " table "
-	}
-
-	queryHeaderStr := " [QUERY] "
-	if m.focus == FocusQuery {
-		queryHeaderStr = " [QUERY] "
-	} else {
-		queryHeaderStr = " query "
-	}
-
-	tHeader := headerStyle.Render(tableHeaderStr)
-	if m.focus == FocusResults {
-		tHeader = headerFocusStyle.Render(tableHeaderStr)
-	}
-
-	qHeader := headerStyle.Render(queryHeaderStr)
-	if m.focus == FocusQuery {
-		qHeader = headerFocusStyle.Render(queryHeaderStr)
-	}
-
-	renderedStatus := statusBarStyle.Render(status)
+	renderedStatus := statusStr // background will be handled by statusLineStyle
 	renderedMode := modeStyle.Render(mode)
+
+	// Calculate filler to push mode to the right
+	// We need to account for the width of the status string (with its styles) and mode
 	fillerWidth := m.width - lipgloss.Width(renderedStatus) - lipgloss.Width(renderedMode)
 	if fillerWidth < 0 {
 		fillerWidth = 0
 	}
 
-	statusLine := lipgloss.JoinHorizontal(lipgloss.Bottom,
+	statusLine := statusLineStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left,
 		renderedStatus,
-		lipgloss.NewStyle().Width(fillerWidth).Render(""),
+		strings.Repeat(" ", fillerWidth),
 		renderedMode,
-	)
+	))
+
+	queryHeaderStr := " [QUERY] "
+	if m.focus == FocusResults {
+		queryHeaderStr = " [RESULT] "
+	}
+
+	qHeader := headerFocusStyle.Render(queryHeaderStr)
 
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Margin(0, 1)
 	helpText := helpStyle.Render("Ctrl+K: autocomplete • Ctrl+Space: menu • Ctrl+P/N: history • Tab: switch focus")
@@ -606,7 +618,6 @@ func (m Model) View() string {
 	queryView := m.renderQueryArea()
 
 	view := lipgloss.JoinVertical(lipgloss.Left,
-		tHeader,
 		m.headerViewport.View(),
 		m.viewport.View(),
 		qHeader,
@@ -641,7 +652,6 @@ func (m Model) View() string {
 		alignedOverlay := lipgloss.NewStyle().PaddingLeft(leftMargin).Render(overlay)
 
 		return lipgloss.JoinVertical(lipgloss.Left,
-			tHeader,
 			m.headerViewport.View(),
 			shrunkenViewport,
 			alignedOverlay,
