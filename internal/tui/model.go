@@ -2,6 +2,9 @@ package tui
 
 import (
 	"bufio"
+	"bytes"
+	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -10,6 +13,7 @@ import (
 	"github.com/mvgrimes/mycli-go/internal/completion"
 	"github.com/mvgrimes/mycli-go/internal/config"
 	"github.com/mvgrimes/mycli-go/internal/db"
+	"github.com/mvgrimes/mycli-go/internal/formatter"
 	"github.com/mvgrimes/mycli-go/internal/vim"
 )
 
@@ -35,6 +39,12 @@ type Model struct {
 	err            error
 	width          int
 	height         int
+
+	currentFormat formatter.Format
+	onceFormat    formatter.Format
+	pagerOverride string
+	lastQuery     string
+	specialOutput bytes.Buffer
 }
 
 func NewModel(conn *db.Connection, cfg *config.Config) Model {
@@ -62,7 +72,31 @@ func NewModel(conn *db.Connection, cfg *config.Config) Model {
 		focus:          FocusQuery,
 		history:        history,
 		historyIndex:   len(history),
+		currentFormat:  formatter.Format(cfg.TableFormat),
 	}
+}
+
+func (m *Model) GetConn() *db.Connection             { return m.conn }
+func (m *Model) GetConfig() *config.Config           { return m.config }
+func (m *Model) GetCurrentFormat() formatter.Format  { return m.currentFormat }
+func (m *Model) SetCurrentFormat(f formatter.Format) { m.currentFormat = f }
+func (m *Model) GetLastQuery() string                { return m.lastQuery }
+func (m *Model) SetLastQuery(q string)               { m.lastQuery = q }
+func (m *Model) SetOnceFormat(f formatter.Format)    { m.onceFormat = f }
+func (m *Model) SetPagerOverride(p string)           { m.pagerOverride = p }
+func (m *Model) GetWriter() io.Writer                { return &m.specialOutput }
+
+func (m *Model) ExecuteQueryWithFormat(query string, format formatter.Format) {
+	m.lastQuery = query
+	result, err := m.conn.ExecuteQuery(query)
+	if err != nil {
+		fmt.Fprintf(&m.specialOutput, "Error: %v\n", err)
+		return
+	}
+	// For TUI, we capture the formatted result in specialOutput
+	// We use RenderResult instead of PrintResult to avoid pager in TUI
+	formatter.RenderResult(result, &m.specialOutput, format, m.config)
+	m.pagerOverride = ""
 }
 
 func loadHistory(filename string) ([]string, []string) {

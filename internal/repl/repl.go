@@ -3,6 +3,7 @@ package repl
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -278,6 +279,7 @@ func (r *REPL) GetLastQuery() string                { return r.lastQuery }
 func (r *REPL) SetLastQuery(q string)               { r.lastQuery = q }
 func (r *REPL) SetOnceFormat(f formatter.Format)    { r.onceFormat = f }
 func (r *REPL) SetPagerOverride(p string)           { r.pagerOverride = p }
+func (r *REPL) GetWriter() io.Writer                { return os.Stdout }
 
 func (r *REPL) ExecuteQueryWithFormat(query string, format formatter.Format) {
 	r.lastQuery = query

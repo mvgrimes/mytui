@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mvgrimes/mycli-go/internal/formatter"
+	"github.com/mvgrimes/mycli-go/internal/special"
 	"github.com/mvgrimes/mycli-go/internal/vim"
 )
 
@@ -285,7 +286,25 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	format := formatter.Format(m.config.TableFormat)
+	// Handle special commands
+	m.specialOutput.Reset()
+	if special.Handle(trimmedQuery, &m) {
+		m.headerViewport.SetContent("")
+		m.headerViewport.Height = 0
+		m.viewport.SetContent(m.specialOutput.String())
+		m.viewport.Height = m.height - 6 - m.headerViewport.Height
+		m.textarea.Reset()
+		// Leave focus in query window for special commands
+		m.saveToHistory(query)
+		return m, nil
+	}
+
+	format := m.currentFormat
+	if m.onceFormat != "" {
+		format = m.onceFormat
+		m.onceFormat = ""
+	}
+
 	if strings.HasSuffix(trimmedQuery, "\\G") {
 		format = formatter.FormatVertical
 		query = strings.TrimSuffix(trimmedQuery, "\\G")
@@ -293,6 +312,7 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 
 	// Save to history
 	m.saveToHistory(query)
+	m.lastQuery = query
 
 	result, err := m.conn.ExecuteQuery(query)
 	if err != nil {

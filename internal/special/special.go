@@ -2,6 +2,7 @@ package special
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ type REPL interface {
 	ExecuteQueryWithFormat(query string, format formatter.Format)
 	SetOnceFormat(format formatter.Format)
 	SetPagerOverride(command string)
+	GetWriter() io.Writer
 }
 
 func Handle(line string, r REPL) bool {
@@ -38,7 +40,7 @@ func Handle(line string, r REPL) bool {
 
 	switch cmd {
 	case "\\q":
-		fmt.Println("Goodbye!")
+		fmt.Fprintln(r.GetWriter(), "Goodbye!")
 		os.Exit(0)
 	case "\\T":
 		handleFormat(parts, r)
@@ -84,23 +86,23 @@ func Handle(line string, r REPL) bool {
 
 func handleFormat(parts []string, r REPL) {
 	if len(parts) < 2 {
-		fmt.Printf("Current format: %s\n", r.GetCurrentFormat())
-		fmt.Println("Usage: \\T [table|vertical|csv|tsv|unicode]")
+		fmt.Fprintf(r.GetWriter(), "Current format: %s\n", r.GetCurrentFormat())
+		fmt.Fprintln(r.GetWriter(), "Usage: \\T [table|vertical|csv|tsv|unicode]")
 		return
 	}
 	newFormat := formatter.Format(parts[1])
 	switch newFormat {
 	case formatter.FormatTable, formatter.FormatVertical, formatter.FormatCSV, formatter.FormatTSV, formatter.FormatUnicode:
 		r.SetCurrentFormat(newFormat)
-		fmt.Printf("Format changed to: %s\n", r.GetCurrentFormat())
+		fmt.Fprintf(r.GetWriter(), "Format changed to: %s\n", r.GetCurrentFormat())
 	default:
-		fmt.Printf("Unknown format: %s\n", newFormat)
+		fmt.Fprintf(r.GetWriter(), "Unknown format: %s\n", newFormat)
 	}
 }
 
 func handleFavoriteSave(line string, parts []string, r REPL) {
 	if len(parts) < 3 {
-		fmt.Println("Usage: \\fs name query")
+		fmt.Fprintln(r.GetWriter(), "Usage: \\fs name query")
 		return
 	}
 	name := parts[1]
@@ -119,20 +121,20 @@ func handleFavoriteSave(line string, parts []string, r REPL) {
 
 	viper.Set("favorite_queries", cfg.FavoriteQueries)
 	if err := viper.WriteConfig(); err != nil {
-		fmt.Printf("Error saving favorite query: %v\n", err)
+		fmt.Fprintf(r.GetWriter(), "Error saving favorite query: %v\n", err)
 	} else {
-		fmt.Printf("Saved favorite query '%s'\n", name)
+		fmt.Fprintf(r.GetWriter(), "Saved favorite query '%s'\n", name)
 	}
 }
 
 func handleFavorite(parts []string, r REPL) {
 	if len(parts) < 2 {
-		fmt.Println("Usage: \\f name [args...]")
+		fmt.Fprintln(r.GetWriter(), "Usage: \\f name [args...]")
 		cfg := r.GetConfig()
 		if len(cfg.FavoriteQueries) > 0 {
-			fmt.Println("\nAvailable favorites:")
+			fmt.Fprintln(r.GetWriter(), "\nAvailable favorites:")
 			for name, query := range cfg.FavoriteQueries {
-				fmt.Printf("  %s: %s\n", name, query)
+				fmt.Fprintf(r.GetWriter(), "  %s: %s\n", name, query)
 			}
 		}
 		return
@@ -141,7 +143,7 @@ func handleFavorite(parts []string, r REPL) {
 	cfg := r.GetConfig()
 	query, ok := cfg.FavoriteQueries[name]
 	if !ok {
-		fmt.Printf("Favorite query '%s' not found\n", name)
+		fmt.Fprintf(r.GetWriter(), "Favorite query '%s' not found\n", name)
 		return
 	}
 
@@ -154,41 +156,41 @@ func handleFavorite(parts []string, r REPL) {
 		query = strings.ReplaceAll(query, placeholder, parts[i])
 	}
 
-	fmt.Printf("Executing favorite query '%s': %s\n", name, query)
+	fmt.Fprintf(r.GetWriter(), "Executing favorite query '%s': %s\n", name, query)
 	r.ExecuteQueryWithFormat(query, r.GetCurrentFormat())
 }
 
 func handleFavoriteDelete(parts []string, r REPL) {
 	if len(parts) < 2 {
-		fmt.Println("Usage: \\fd name")
+		fmt.Fprintln(r.GetWriter(), "Usage: \\fd name")
 		return
 	}
 	name := parts[1]
 	cfg := r.GetConfig()
 	if _, ok := cfg.FavoriteQueries[name]; !ok {
-		fmt.Printf("Favorite query '%s' not found\n", name)
+		fmt.Fprintf(r.GetWriter(), "Favorite query '%s' not found\n", name)
 		return
 	}
 
 	delete(cfg.FavoriteQueries, name)
 	viper.Set("favorite_queries", cfg.FavoriteQueries)
 	if err := viper.WriteConfig(); err != nil {
-		fmt.Printf("Error deleting favorite query: %v\n", err)
+		fmt.Fprintf(r.GetWriter(), "Error deleting favorite query: %v\n", err)
 	} else {
-		fmt.Printf("Deleted favorite query '%s'\n", name)
+		fmt.Fprintf(r.GetWriter(), "Deleted favorite query '%s'\n", name)
 	}
 }
 
 func handleClip(r REPL) {
 	lastQuery := r.GetLastQuery()
 	if lastQuery == "" {
-		fmt.Println("No previous query to copy.")
+		fmt.Fprintln(r.GetWriter(), "No previous query to copy.")
 		return
 	}
 
 	result, err := r.GetConn().ExecuteQuery(lastQuery)
 	if err != nil {
-		fmt.Printf("Error re-executing query for clipboard: %v\n", err)
+		fmt.Fprintf(r.GetWriter(), "Error re-executing query for clipboard: %v\n", err)
 		return
 	}
 
@@ -197,15 +199,15 @@ func handleClip(r REPL) {
 
 	err = clipboard.WriteAll(buf.String())
 	if err != nil {
-		fmt.Printf("Error copying to clipboard: %v\n", err)
+		fmt.Fprintf(r.GetWriter(), "Error copying to clipboard: %v\n", err)
 	} else {
-		fmt.Println("Last result copied to clipboard.")
+		fmt.Fprintln(r.GetWriter(), "Last result copied to clipboard.")
 	}
 }
 
 func handleOnce(line string, parts []string, r REPL) {
 	if len(parts) < 2 {
-		fmt.Println("Usage: \\once format [query]")
+		fmt.Fprintln(r.GetWriter(), "Usage: \\once format [query]")
 		return
 	}
 	format := formatter.Format(parts[1])
@@ -221,13 +223,13 @@ func handleOnce(line string, parts []string, r REPL) {
 		r.ExecuteQueryWithFormat(query, format)
 	} else {
 		r.SetOnceFormat(format)
-		fmt.Printf("Next query will use format: %s\n", format)
+		fmt.Fprintf(r.GetWriter(), "Next query will use format: %s\n", format)
 	}
 }
 
 func handlePipe(line string, parts []string, r REPL) {
 	if len(parts) < 2 {
-		fmt.Println("Usage: \\| command")
+		fmt.Fprintln(r.GetWriter(), "Usage: \\| command")
 		return
 	}
 
@@ -239,7 +241,7 @@ func handlePipe(line string, parts []string, r REPL) {
 	command := strings.TrimSpace(line[idx+2:])
 
 	r.SetPagerOverride(command)
-	fmt.Printf("Next query result will be piped to: %s\n", command)
+	fmt.Fprintf(r.GetWriter(), "Next query result will be piped to: %s\n", command)
 }
 
 func formatUptime(secondsStr string) string {
@@ -276,6 +278,7 @@ func formatVal(v interface{}) string {
 func handleStatus(r REPL) {
 	conn := r.GetConn()
 	cfg := r.GetConfig()
+	w := r.GetWriter()
 
 	// Get Status
 	res, err := conn.ExecuteQuery("SHOW GLOBAL STATUS")
@@ -329,33 +332,33 @@ func handleStatus(r REPL) {
 		cid = formatVal(res.Rows[0][0])
 	}
 
-	fmt.Println("--------------")
-	fmt.Printf("Connection id:          %s\n", cid)
-	fmt.Printf("Current database:       %s\n", dbName)
-	fmt.Printf("Current user:           %s\n", user)
-	fmt.Printf("Current pager:          %s\n", cfg.Pager)
-	fmt.Printf("Server version:         %s %s\n", vars["version"], vars["version_comment"])
-	fmt.Printf("Protocol version:       %s\n", vars["protocol_version"])
+	fmt.Fprintln(w, "--------------")
+	fmt.Fprintf(w, "Connection id:          %s\n", cid)
+	fmt.Fprintf(w, "Current database:       %s\n", dbName)
+	fmt.Fprintf(w, "Current user:           %s\n", user)
+	fmt.Fprintf(w, "Current pager:          %s\n", cfg.Pager)
+	fmt.Fprintf(w, "Server version:         %s %s\n", vars["version"], vars["version_comment"])
+	fmt.Fprintf(w, "Protocol version:       %s\n", vars["protocol_version"])
 
 	if conn.Config.Socket != "" {
-		fmt.Printf("Connection:             Localhost via UNIX socket\n")
+		fmt.Fprintf(w, "Connection:             Localhost via UNIX socket\n")
 	} else {
-		fmt.Printf("Connection:             %s via TCP/IP\n", conn.Config.Host)
+		fmt.Fprintf(w, "Connection:             %s via TCP/IP\n", conn.Config.Host)
 	}
 
-	fmt.Printf("Server characterset:    %s\n", charsets[0])
-	fmt.Printf("Db characterset:        %s\n", charsets[1])
-	fmt.Printf("Client characterset:    %s\n", charsets[2])
-	fmt.Printf("Conn. characterset:     %s\n", charsets[3])
+	fmt.Fprintf(w, "Server characterset:    %s\n", charsets[0])
+	fmt.Fprintf(w, "Db characterset:        %s\n", charsets[1])
+	fmt.Fprintf(w, "Client characterset:    %s\n", charsets[2])
+	fmt.Fprintf(w, "Conn. characterset:     %s\n", charsets[3])
 
 	if conn.Config.Socket != "" {
-		fmt.Printf("UNIX socket:            %s\n", conn.Config.Socket)
+		fmt.Fprintf(w, "UNIX socket:            %s\n", conn.Config.Socket)
 	} else {
-		fmt.Printf("TCP port:               %d\n", conn.Config.Port)
+		fmt.Fprintf(w, "TCP port:               %d\n", conn.Config.Port)
 	}
 
 	if uptime, ok := status["Uptime"]; ok {
-		fmt.Printf("Uptime:                 %s\n", formatUptime(uptime))
+		fmt.Fprintf(w, "Uptime:                 %s\n", formatUptime(uptime))
 	}
 
 	if threads, ok := status["Threads_connected"]; ok {
@@ -365,21 +368,22 @@ func handleStatus(r REPL) {
 		if u > 0 {
 			qps = float64(q) / float64(u)
 		}
-		fmt.Printf("\nConnections: %s  Queries: %s  Slow queries: %s  Opens: %s  Open tables: %s  Queries per second avg: %.3f\n",
+		fmt.Fprintf(w, "\nConnections: %s  Queries: %s  Slow queries: %s  Opens: %s  Open tables: %s  Queries per second avg: %.3f\n",
 			threads, status["Queries"], status["Slow_queries"], status["Opened_tables"], status["Open_tables"], qps)
 	}
-	fmt.Println("--------------")
+	fmt.Fprintln(w, "--------------")
 }
 
 func handleVersion(r REPL) {
 	cfg := r.GetConfig()
-	fmt.Println("--------------")
-	fmt.Println("mycli-go 0.1.0")
-	fmt.Printf("Pager:        %s\n", cfg.Pager)
-	fmt.Printf("History file: %s\n", cfg.HistoryFile)
-	fmt.Printf("Table format: %s\n", cfg.TableFormat)
-	fmt.Printf("Syntax style: %s\n", cfg.SyntaxStyle)
-	fmt.Printf("Key bindings: %s\n", cfg.KeyBindings)
-	fmt.Printf("Multi-line:   %v\n", cfg.MultiLine)
-	fmt.Println("--------------")
+	w := r.GetWriter()
+	fmt.Fprintln(w, "--------------")
+	fmt.Fprintln(w, "mycli-go 0.1.0")
+	fmt.Fprintf(w, "Pager:        %s\n", cfg.Pager)
+	fmt.Fprintf(w, "History file: %s\n", cfg.HistoryFile)
+	fmt.Fprintf(w, "Table format: %s\n", cfg.TableFormat)
+	fmt.Fprintf(w, "Syntax style: %s\n", cfg.SyntaxStyle)
+	fmt.Fprintf(w, "Key bindings: %s\n", cfg.KeyBindings)
+	fmt.Fprintf(w, "Multi-line:   %v\n", cfg.MultiLine)
+	fmt.Fprintln(w, "--------------")
 }
