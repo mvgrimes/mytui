@@ -73,6 +73,26 @@ func (m *Model) saveToHistory(line string) {
 	}
 }
 
+func (m *Model) recalculateHeight() {
+	queryAreaHeight := len(strings.Split(m.textarea.Value(), "\n"))
+	if queryAreaHeight < 3 {
+		queryAreaHeight = 3
+	}
+	if m.textarea.Value() == "" {
+		queryAreaHeight = len(strings.Split(m.textarea.Placeholder, "\n"))
+		if queryAreaHeight < 3 {
+			queryAreaHeight = 3
+		}
+	}
+
+	// 1 (qHeader) + queryAreaHeight + 1 (helpText) + 1 (statusLine)
+	overhead := 3 + queryAreaHeight
+	m.viewport.Height = m.height - overhead - m.headerViewport.Height
+	if m.viewport.Height < 0 {
+		m.viewport.Height = 0
+	}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		tiCmd tea.Cmd
@@ -353,7 +373,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textarea.SetWidth(msg.Width)
 		m.headerViewport.Width = msg.Width
 		m.viewport.Width = msg.Width
-		m.viewport.Height = m.height - 6 - m.headerViewport.Height
+		m.recalculateHeight()
 		return m, nil
 	}
 
@@ -362,10 +382,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textarea, tiCmd = m.textarea.Update(msg)
 		if m.textarea.Value() != oldVal {
 			m.lastError = parser.Validate(m.textarea.Value())
+			m.recalculateHeight()
 		}
 	} else if m.focus == FocusQuery && m.vimState.Mode == vim.NormalMode {
+		oldVal := m.textarea.Value()
 		if _, ok := msg.(tea.KeyMsg); !ok {
 			m.textarea, tiCmd = m.textarea.Update(msg)
+		} else {
+			// Some key msgs in normal mode still change content (e.g. 'x', 'dd' implemented via Update calls)
+			// But my current implementation of normal mode handles most keys manually.
+		}
+		if m.textarea.Value() != oldVal {
+			m.recalculateHeight()
 		}
 	}
 
@@ -400,7 +428,7 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 		m.headerViewport.SetContent("")
 		m.headerViewport.Height = 0
 		m.viewport.SetContent(m.specialOutput.String())
-		m.viewport.Height = m.height - 6 - m.headerViewport.Height
+		m.recalculateHeight()
 		m.textarea.Reset()
 		m.saveToHistory(query)
 		return m, nil
@@ -426,7 +454,7 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 		m.headerViewport.Height = 0
 		wrappedError := lipgloss.NewStyle().Width(m.width - 2).Render(fmt.Sprintf("Error: %v", err))
 		m.viewport.SetContent(wrappedError)
-		m.viewport.Height = m.height - 6 - m.headerViewport.Height
+		m.recalculateHeight()
 		return m, nil
 	} else {
 		fullResult := formatter.FormatResult(result, format, m.config)
@@ -442,7 +470,7 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 			m.viewport.SetContent(fullResult)
 		}
 
-		m.viewport.Height = m.height - 6 - m.headerViewport.Height
+		m.recalculateHeight()
 		m.textarea.Reset()
 		m.focus = FocusResults
 		m.textarea.Blur()
