@@ -25,6 +25,8 @@ var specialCommands = []prompt.Suggest{
 	{Text: "\\clip", Description: "Copy last result to clipboard"},
 	{Text: "\\once", Description: "Use format for next query only"},
 	{Text: "\\|", Description: "Pipe next result to shell command"},
+	{Text: "\\s", Description: "Get status information from the server"},
+	{Text: "\\v", Description: "Show client configuration"},
 	{Text: "\\q", Description: "Quit"},
 	{Text: "\\e", Description: "Open external editor"},
 }

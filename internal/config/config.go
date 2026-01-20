@@ -20,6 +20,7 @@ type Config struct {
 	PromptContinuation string            `mapstructure:"prompt_continuation"`
 	FavoriteQueries    map[string]string `mapstructure:"favorite_queries"`
 	AutoVerticalOutput bool              `mapstructure:"auto_vertical_output"`
+	MultiLine          bool              `mapstructure:"multi_line"`
 }
 
 func LoadConfig(customPath string) (*Config, error) {
@@ -41,6 +42,7 @@ func LoadConfig(customPath string) (*Config, error) {
 	viper.SetDefault("prompt_continuation", "-> ")
 	viper.SetDefault("favorite_queries", make(map[string]string))
 	viper.SetDefault("auto_vertical_output", true)
+	viper.SetDefault("multi_line", false)
 
 	if customPath != "" {
 		viper.SetConfigFile(customPath)

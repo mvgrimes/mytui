@@ -3,6 +3,7 @@ package special
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -59,6 +60,12 @@ func Handle(line string, r REPL) bool {
 		return true
 	case "\\|":
 		handlePipe(line, parts, r)
+		return true
+	case "\\s":
+		handleStatus(r)
+		return true
+	case "\\v":
+		handleVersion(r)
 		return true
 	case "\\e":
 		// \e is handled specifically in REPL because it needs terminal control
@@ -233,4 +240,146 @@ func handlePipe(line string, parts []string, r REPL) {
 
 	r.SetPagerOverride(command)
 	fmt.Printf("Next query result will be piped to: %s\n", command)
+}
+
+func formatUptime(secondsStr string) string {
+	seconds, _ := strconv.Atoi(secondsStr)
+	days := seconds / 86400
+	hours := (seconds % 86400) / 3600
+	minutes := (seconds % 3600) / 60
+	secs := seconds % 60
+
+	var parts []string
+	if days > 0 {
+		parts = append(parts, fmt.Sprintf("%d days", days))
+	}
+	if hours > 0 {
+		parts = append(parts, fmt.Sprintf("%d hours", hours))
+	}
+	if minutes > 0 {
+		parts = append(parts, fmt.Sprintf("%d min", minutes))
+	}
+	parts = append(parts, fmt.Sprintf("%d sec", secs))
+	return strings.Join(parts, " ")
+}
+
+func formatVal(v interface{}) string {
+	if v == nil {
+		return "<null>"
+	}
+	if b, ok := v.([]byte); ok {
+		return string(b)
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+func handleStatus(r REPL) {
+	conn := r.GetConn()
+	cfg := r.GetConfig()
+
+	// Get Status
+	res, err := conn.ExecuteQuery("SHOW GLOBAL STATUS")
+	if err != nil {
+		res, _ = conn.ExecuteQuery("SHOW STATUS")
+	}
+	status := make(map[string]string)
+	if res != nil {
+		for _, row := range res.Rows {
+			if len(row) >= 2 {
+				status[formatVal(row[0])] = formatVal(row[1])
+			}
+		}
+	}
+
+	// Get Variables
+	res, err = conn.ExecuteQuery("SHOW GLOBAL VARIABLES")
+	if err != nil {
+		res, _ = conn.ExecuteQuery("SHOW VARIABLES")
+	}
+	vars := make(map[string]string)
+	if res != nil {
+		for _, row := range res.Rows {
+			if len(row) >= 2 {
+				vars[formatVal(row[0])] = formatVal(row[1])
+			}
+		}
+	}
+
+	// Get Charsets
+	charsets := make([]string, 4)
+	res, _ = conn.ExecuteQuery("SELECT @@character_set_server, @@character_set_database, @@character_set_client, @@character_set_connection")
+	if res != nil && len(res.Rows) > 0 {
+		for i := 0; i < 4; i++ {
+			charsets[i] = formatVal(res.Rows[0][i])
+		}
+	}
+
+	// Get DB and User
+	var dbName, user string
+	res, _ = conn.ExecuteQuery("SELECT DATABASE(), USER()")
+	if res != nil && len(res.Rows) > 0 {
+		dbName = formatVal(res.Rows[0][0])
+		user = formatVal(res.Rows[0][1])
+	}
+
+	// Connection ID
+	var cid string
+	res, _ = conn.ExecuteQuery("SELECT CONNECTION_ID()")
+	if res != nil && len(res.Rows) > 0 {
+		cid = formatVal(res.Rows[0][0])
+	}
+
+	fmt.Println("--------------")
+	fmt.Printf("Connection id:          %s\n", cid)
+	fmt.Printf("Current database:       %s\n", dbName)
+	fmt.Printf("Current user:           %s\n", user)
+	fmt.Printf("Current pager:          %s\n", cfg.Pager)
+	fmt.Printf("Server version:         %s %s\n", vars["version"], vars["version_comment"])
+	fmt.Printf("Protocol version:       %s\n", vars["protocol_version"])
+
+	if conn.Config.Socket != "" {
+		fmt.Printf("Connection:             Localhost via UNIX socket\n")
+	} else {
+		fmt.Printf("Connection:             %s via TCP/IP\n", conn.Config.Host)
+	}
+
+	fmt.Printf("Server characterset:    %s\n", charsets[0])
+	fmt.Printf("Db characterset:        %s\n", charsets[1])
+	fmt.Printf("Client characterset:    %s\n", charsets[2])
+	fmt.Printf("Conn. characterset:     %s\n", charsets[3])
+
+	if conn.Config.Socket != "" {
+		fmt.Printf("UNIX socket:            %s\n", conn.Config.Socket)
+	} else {
+		fmt.Printf("TCP port:               %d\n", conn.Config.Port)
+	}
+
+	if uptime, ok := status["Uptime"]; ok {
+		fmt.Printf("Uptime:                 %s\n", formatUptime(uptime))
+	}
+
+	if threads, ok := status["Threads_connected"]; ok {
+		qps := 0.0
+		u, _ := strconv.Atoi(status["Uptime"])
+		q, _ := strconv.Atoi(status["Queries"])
+		if u > 0 {
+			qps = float64(q) / float64(u)
+		}
+		fmt.Printf("\nConnections: %s  Queries: %s  Slow queries: %s  Opens: %s  Open tables: %s  Queries per second avg: %.3f\n",
+			threads, status["Queries"], status["Slow_queries"], status["Opened_tables"], status["Open_tables"], qps)
+	}
+	fmt.Println("--------------")
+}
+
+func handleVersion(r REPL) {
+	cfg := r.GetConfig()
+	fmt.Println("--------------")
+	fmt.Println("mycli-go 0.1.0")
+	fmt.Printf("Pager:        %s\n", cfg.Pager)
+	fmt.Printf("History file: %s\n", cfg.HistoryFile)
+	fmt.Printf("Table format: %s\n", cfg.TableFormat)
+	fmt.Printf("Syntax style: %s\n", cfg.SyntaxStyle)
+	fmt.Printf("Key bindings: %s\n", cfg.KeyBindings)
+	fmt.Printf("Multi-line:   %v\n", cfg.MultiLine)
+	fmt.Println("--------------")
 }
