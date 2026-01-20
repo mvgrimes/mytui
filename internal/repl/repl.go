@@ -128,12 +128,26 @@ func loadHistory(filename string) []string {
 	}
 	defer file.Close()
 
+	var currentEntry []string
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.TrimSpace(line) != "" {
-			history = append(history, line)
+		if strings.HasPrefix(line, "#") {
+			if len(currentEntry) > 0 {
+				history = append(history, strings.Join(currentEntry, "\n"))
+				currentEntry = nil
+			}
+		} else if strings.HasPrefix(line, "+") {
+			currentEntry = append(currentEntry, line[1:])
+		} else {
+			if len(currentEntry) > 0 {
+				history = append(history, strings.Join(currentEntry, "\n"))
+				currentEntry = nil
+			}
 		}
+	}
+	if len(currentEntry) > 0 {
+		history = append(history, strings.Join(currentEntry, "\n"))
 	}
 	return history
 }
@@ -143,14 +157,24 @@ func (r *REPL) saveToHistory(line string) {
 		return
 	}
 
+	// Update in-memory history
+	r.history = append(r.history, line)
+
 	f, err := os.OpenFile(r.config.HistoryFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
 	}
 	defer f.Close()
 
-	if _, err := f.WriteString(line + "\n"); err != nil {
+	now := time.Now().Format("2006-01-02 15:04:05")
+	if _, err := f.WriteString(fmt.Sprintf("# %s\n", now)); err != nil {
 		return
+	}
+	lines := strings.Split(line, "\n")
+	for _, l := range lines {
+		if _, err := f.WriteString(fmt.Sprintf("+%s\n", l)); err != nil {
+			return
+		}
 	}
 }
 
@@ -229,19 +253,22 @@ func (r *REPL) handleHistorySearch(buf *prompt.Buffer) {
 	}
 	defer os.Remove(tempFile.Name())
 
-	for _, line := range r.history {
-		tempFile.WriteString(line + "\n")
+	// Use null bytes to separate entries for multiline support in fzf
+	for i := len(r.history) - 1; i >= 0; i-- {
+		tempFile.Write([]byte(r.history[i]))
+		tempFile.Write([]byte{0})
 	}
 	tempFile.Close()
 
-	cmd := exec.Command("sh", "-c", "fzf < "+tempFile.Name())
+	// --read0 to read null-terminated items, --print0 to print selected item null-terminated
+	cmd := exec.Command("sh", "-c", "fzf --read0 --print0 < "+tempFile.Name())
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
 	if err != nil {
 		return
 	}
 
-	selected := strings.TrimSpace(string(out))
+	selected := strings.TrimRight(string(out), "\x00")
 	if selected != "" {
 		buf.DeleteBeforeCursor(len([]rune(buf.Document().TextBeforeCursor())))
 		buf.Delete(len([]rune(buf.Document().TextAfterCursor())))
