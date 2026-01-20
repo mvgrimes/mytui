@@ -19,25 +19,28 @@ import (
 )
 
 type REPL struct {
-	conn          *db.Connection
-	completer     *completion.Completer
-	vimState      *vim.VimState
-	currentFormat formatter.Format
-	onceFormat    formatter.Format
-	pagerOverride string
-	lastQuery     string
-	config        *config.Config
-	history       []string
+	conn              *db.Connection
+	completer         *completion.Completer
+	vimState          *vim.VimState
+	currentFormat     formatter.Format
+	onceFormat        formatter.Format
+	pagerOverride     string
+	lastQuery         string
+	config            *config.Config
+	history           []string
+	historyTimestamps []string
 }
 
 func NewREPL(conn *db.Connection, cfg *config.Config) *REPL {
+	history, timestamps := loadHistory(cfg.HistoryFile)
 	r := &REPL{
-		conn:          conn,
-		completer:     completion.NewCompleter(),
-		vimState:      vim.NewVimState(),
-		currentFormat: formatter.Format(cfg.TableFormat),
-		config:        cfg,
-		history:       loadHistory(cfg.HistoryFile),
+		conn:              conn,
+		completer:         completion.NewCompleter(),
+		vimState:          vim.NewVimState(),
+		currentFormat:     formatter.Format(cfg.TableFormat),
+		config:            cfg,
+		history:           history,
+		historyTimestamps: timestamps,
 	}
 	r.completer.SmartCompletion = cfg.SmartCompletion
 	return r
@@ -120,36 +123,42 @@ func RunREPL(conn *db.Connection, cfg *config.Config) {
 	p.Run()
 }
 
-func loadHistory(filename string) []string {
+func loadHistory(filename string) ([]string, []string) {
 	var history []string
+	var timestamps []string
 	file, err := os.Open(filename)
 	if err != nil {
-		return history
+		return history, timestamps
 	}
 	defer file.Close()
 
 	var currentEntry []string
+	var currentTimestamp string
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "#") {
 			if len(currentEntry) > 0 {
 				history = append(history, strings.Join(currentEntry, "\n"))
+				timestamps = append(timestamps, currentTimestamp)
 				currentEntry = nil
 			}
+			currentTimestamp = strings.TrimSpace(line[1:])
 		} else if strings.HasPrefix(line, "+") {
 			currentEntry = append(currentEntry, line[1:])
 		} else {
 			if len(currentEntry) > 0 {
 				history = append(history, strings.Join(currentEntry, "\n"))
+				timestamps = append(timestamps, currentTimestamp)
 				currentEntry = nil
 			}
 		}
 	}
 	if len(currentEntry) > 0 {
 		history = append(history, strings.Join(currentEntry, "\n"))
+		timestamps = append(timestamps, currentTimestamp)
 	}
-	return history
+	return history, timestamps
 }
 
 func (r *REPL) saveToHistory(line string) {
@@ -157,8 +166,10 @@ func (r *REPL) saveToHistory(line string) {
 		return
 	}
 
+	now := time.Now().Format("2006-01-02 15:04:05")
 	// Update in-memory history
 	r.history = append(r.history, line)
+	r.historyTimestamps = append(r.historyTimestamps, now)
 
 	f, err := os.OpenFile(r.config.HistoryFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -166,7 +177,6 @@ func (r *REPL) saveToHistory(line string) {
 	}
 	defer f.Close()
 
-	now := time.Now().Format("2006-01-02 15:04:05")
 	if _, err := f.WriteString(fmt.Sprintf("# %s\n", now)); err != nil {
 		return
 	}
@@ -255,13 +265,20 @@ func (r *REPL) handleHistorySearch(buf *prompt.Buffer) {
 
 	// Use null bytes to separate entries for multiline support in fzf
 	for i := len(r.history) - 1; i >= 0; i-- {
-		tempFile.Write([]byte(r.history[i]))
+		ts := "Unknown Date"
+		if i < len(r.historyTimestamps) {
+			ts = r.historyTimestamps[i]
+		}
+		// Format: [Date] Query
+		entry := fmt.Sprintf("[%s] %s", ts, r.history[i])
+		tempFile.Write([]byte(entry))
 		tempFile.Write([]byte{0})
 	}
 	tempFile.Close()
 
 	// --read0 to read null-terminated items, --print0 to print selected item null-terminated
-	cmd := exec.Command("sh", "-c", "fzf --read0 --print0 < "+tempFile.Name())
+	fzfCmd := "fzf --read0 --print0 --scheme=history --tiebreak=index --bind ctrl-r:up,alt-r:up --preview-window=down:wrap --preview=\"printf '%s' {}\""
+	cmd := exec.Command("sh", "-c", fzfCmd+" < "+tempFile.Name())
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
 	if err != nil {
@@ -270,6 +287,13 @@ func (r *REPL) handleHistorySearch(buf *prompt.Buffer) {
 
 	selected := strings.TrimRight(string(out), "\x00")
 	if selected != "" {
+		// Strip the [Date] prefix
+		// Format is [YYYY-MM-DD HH:MM:SS] (21 chars) + " " (1 char) = 22 chars
+		// But let's be more robust and find the first "] "
+		if idx := strings.Index(selected, "] "); idx != -1 {
+			selected = selected[idx+2:]
+		}
+
 		buf.DeleteBeforeCursor(len([]rune(buf.Document().TextBeforeCursor())))
 		buf.Delete(len([]rune(buf.Document().TextAfterCursor())))
 		buf.InsertText(selected, false, true)
