@@ -76,6 +76,18 @@ func RunREPL(conn *db.Connection, cfg *config.Config) {
 		prompt.OptionTitle("mycli-go"),
 		prompt.OptionHistory(r.history),
 		prompt.OptionLivePrefix(livePrefix),
+		prompt.OptionAddKeyBind(prompt.KeyBind{
+			Key: prompt.ControlW,
+			Fn: func(buf *prompt.Buffer) {
+				buf.DeleteBeforeCursor(len([]rune(buf.Document().TextBeforeCursor())) - buf.Document().FindStartOfPreviousWordWithSpace())
+			},
+		}),
+		prompt.OptionAddKeyBind(prompt.KeyBind{
+			Key: prompt.ControlU,
+			Fn: func(buf *prompt.Buffer) {
+				buf.DeleteBeforeCursor(len([]rune(buf.Document().TextBeforeCursor())))
+			},
+		}),
 	}
 
 	if r.config.KeyBindings == "vim" {
