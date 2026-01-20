@@ -2,14 +2,17 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
+	"github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
 	"github.com/mvgrimes/mycli-go/internal/config"
 	"github.com/mvgrimes/mycli-go/internal/db"
 	"github.com/mvgrimes/mycli-go/internal/formatter"
 	"github.com/mvgrimes/mycli-go/internal/repl"
+	"github.com/mvgrimes/mycli-go/internal/tui"
 )
 
 var version = "0.1.0"
@@ -49,6 +52,7 @@ administration and development.`,
 	rootCmd.Flags().StringP("prompt", "R", "", "Prompt template")
 	rootCmd.Flags().StringP("config", "c", "", "Path to config file")
 	rootCmd.Flags().StringP("execute", "e", "", "Execute a command and quit")
+	rootCmd.Flags().Bool("tui", false, "Use the new TUI interface")
 
 	// Allow database as positional argument
 	rootCmd.Args = cobra.MaximumNArgs(1)
@@ -74,6 +78,7 @@ func runREPL(cmd *cobra.Command, args []string) error {
 	promptFlag, _ := cmd.Flags().GetString("prompt")
 	configPath, _ := cmd.Flags().GetString("config")
 	executeFlag, _ := cmd.Flags().GetString("execute")
+	tuiFlag, _ := cmd.Flags().GetBool("tui")
 
 	// Use positional argument for database if flag is not set
 	if database == "" && len(args) > 0 {
@@ -110,6 +115,26 @@ func runREPL(cmd *cobra.Command, args []string) error {
 		SSLKey:   sslKey,
 	}
 
+	// Check for piped input first
+	stat, _ := os.Stdin.Stat()
+	if (stat.Mode() & os.ModeCharDevice) == 0 {
+		query, err := io.ReadAll(os.Stdin)
+		if err == nil && len(query) > 0 {
+			conn, err := db.NewConnection(dbConfig)
+			if err != nil {
+				return fmt.Errorf("failed to connect to database: %v", err)
+			}
+			defer conn.Close()
+
+			result, err := conn.ExecuteQuery(string(query))
+			if err != nil {
+				return fmt.Errorf("failed to execute query: %v", err)
+			}
+			formatter.PrintResult(result, os.Stdout, formatter.Format(cfg.TableFormat), cfg, "")
+			return nil
+		}
+	}
+
 	fmt.Printf("Connecting to MySQL at %s:%d as user %s...\n", host, port, user)
 	conn, err := db.NewConnection(dbConfig)
 	if err != nil {
@@ -122,10 +147,6 @@ func runREPL(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to execute query: %v", err)
 		}
-		// In execute mode, we use the default format or config format
-		// No pager, no timing (unless requested? usually -e is for scripting)
-		// Let's use PrintResult with no pager override
-		// We need the formatter package
 		formatter.PrintResult(result, os.Stdout, formatter.Format(cfg.TableFormat), cfg, "")
 		return nil
 	}
@@ -133,6 +154,14 @@ func runREPL(cmd *cobra.Command, args []string) error {
 	serverVersion, err := conn.GetServerInfo()
 	if err == nil {
 		fmt.Printf("Connected! Server version: %s\n", serverVersion)
+	}
+
+	if tuiFlag {
+		p := tea.NewProgram(tui.NewModel(conn, cfg), tea.WithAltScreen())
+		if _, err := p.Run(); err != nil {
+			return fmt.Errorf("error running TUI: %v", err)
+		}
+		return nil
 	}
 
 	repl.RunREPL(conn, cfg)
