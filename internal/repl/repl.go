@@ -91,6 +91,12 @@ func RunREPL(conn *db.Connection, cfg *config.Config) {
 			},
 		}),
 		prompt.OptionAddKeyBind(prompt.KeyBind{
+			Key: prompt.ControlR,
+			Fn: func(buf *prompt.Buffer) {
+				r.handleHistorySearch(buf)
+			},
+		}),
+		prompt.OptionAddKeyBind(prompt.KeyBind{
 			Key: prompt.ControlN,
 			Fn: func(buf *prompt.Buffer) {
 				// History mapping
@@ -213,6 +219,34 @@ func (r *REPL) ExecuteQueryWithFormat(query string, format formatter.Format) {
 	}
 	formatter.PrintResult(result, os.Stdout, format, r.config, r.pagerOverride)
 	r.pagerOverride = "" // Reset after use
+}
+
+func (r *REPL) handleHistorySearch(buf *prompt.Buffer) {
+	// Simple fzf integration for history search
+	tempFile, err := os.CreateTemp("", "mycli-history")
+	if err != nil {
+		return
+	}
+	defer os.Remove(tempFile.Name())
+
+	for _, line := range r.history {
+		tempFile.WriteString(line + "\n")
+	}
+	tempFile.Close()
+
+	cmd := exec.Command("sh", "-c", "fzf < "+tempFile.Name())
+	cmd.Stderr = os.Stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return
+	}
+
+	selected := strings.TrimSpace(string(out))
+	if selected != "" {
+		buf.DeleteBeforeCursor(len([]rune(buf.Document().TextBeforeCursor())))
+		buf.Delete(len([]rune(buf.Document().TextAfterCursor())))
+		buf.InsertText(selected, false, true)
+	}
 }
 
 func (r *REPL) executor(line string) {
