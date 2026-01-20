@@ -50,18 +50,18 @@ func RunREPL(conn *db.Connection, cfg *config.Config) {
 	r := NewREPL(conn, cfg)
 
 	// Initial schema fetch
-	metadata, err := getMetadata(conn)
+	cache, err := r.fetchCache()
 	if err == nil {
-		r.completer.UpdateSchema(metadata)
+		r.completer.UpdateCache(cache)
 	}
 
 	// Background refresh every 5 minutes
 	go func() {
 		for {
 			time.Sleep(5 * time.Minute)
-			metadata, err := getMetadata(conn)
+			cache, err := r.fetchCache()
 			if err == nil {
-				r.completer.UpdateSchema(metadata)
+				r.completer.UpdateCache(cache)
 			}
 		}
 	}()
@@ -77,6 +77,7 @@ func RunREPL(conn *db.Connection, cfg *config.Config) {
 	}
 
 	options := []prompt.Option{
+
 		prompt.OptionTitle("mycli-go"),
 		prompt.OptionHistory(r.history),
 		prompt.OptionLivePrefix(livePrefix),
@@ -218,21 +219,55 @@ func (r *REPL) formatPrompt() string {
 	return re.ReplaceAllString(p, "")
 }
 
-func getMetadata(conn *db.Connection) (map[string][]string, error) {
+func (r *REPL) fetchCache() (*completion.DBCache, error) {
+	cache := completion.NewDBCache()
+	cache.DefaultSchema = r.conn.GetCurrentDatabase()
 
-	tables, err := conn.GetTables()
+	schemas, err := r.conn.GetSchemas()
 	if err != nil {
 		return nil, err
 	}
 
-	metadata := make(map[string][]string)
-	for _, table := range tables {
-		columns, err := conn.GetColumns(table)
+	for _, s := range schemas {
+		cache.Schemas[strings.ToUpper(s)] = s
+		tables, err := r.conn.GetTablesFromSchema(s)
+		if err != nil {
+			continue
+		}
+		cache.SchemaTables[strings.ToUpper(s)] = tables
+
+		cols, err := r.conn.DescribeDatabaseTableBySchema(s)
 		if err == nil {
-			metadata[table] = columns
+			for _, col := range cols {
+				key := strings.ToUpper(s) + "\t" + strings.ToUpper(col.Table)
+				cache.ColumnsWithParent[key] = append(cache.ColumnsWithParent[key], col)
+			}
+		}
+
+		fks, err := r.conn.DescribeForeignKeysBySchema(s)
+		if err == nil {
+			for _, fk := range fks {
+				// sqls structure is map[table][referencedTable][]*ForeignKey
+				if len(*fk) > 0 {
+					table := (*fk)[0][0].Table
+					refTable := (*fk)[0][1].Table
+
+					if cache.ForeignKeys[table] == nil {
+						cache.ForeignKeys[table] = make(map[string][]*db.ForeignKey)
+					}
+					cache.ForeignKeys[table][refTable] = append(cache.ForeignKeys[table][refTable], fk)
+
+					// Also add reverse mapping for joining either way
+					if cache.ForeignKeys[refTable] == nil {
+						cache.ForeignKeys[refTable] = make(map[string][]*db.ForeignKey)
+					}
+					cache.ForeignKeys[refTable][table] = append(cache.ForeignKeys[refTable][table], fk)
+				}
+			}
 		}
 	}
-	return metadata, nil
+
+	return cache, nil
 }
 
 func (r *REPL) GetConn() *db.Connection             { return r.conn }
@@ -345,9 +380,9 @@ func (r *REPL) executor(line string) {
 		strings.HasPrefix(upperLine, "DROP") ||
 		strings.HasPrefix(upperLine, "ALTER") {
 		go func() {
-			metadata, err := getMetadata(r.conn)
+			cache, err := r.fetchCache()
 			if err == nil {
-				r.completer.UpdateSchema(metadata)
+				r.completer.UpdateCache(cache)
 			}
 		}()
 	}

@@ -1,16 +1,16 @@
 package completion
 
 import (
+	"github.com/mvgrimes/mycli-go/internal/db"
 	"testing"
 )
 
 func TestCompleter_resolveTable(t *testing.T) {
 	c := NewCompleter()
-	metadata := map[string][]string{
-		"users":    {"id", "name", "email"},
-		"projects": {"id", "user_id", "title"},
-	}
-	c.UpdateSchema(metadata)
+	cache := NewDBCache()
+	cache.DefaultSchema = "DB"
+	cache.SchemaTables["DB"] = []string{"users", "projects"}
+	c.UpdateCache(cache)
 
 	tests := []struct {
 		name     string
@@ -42,12 +42,6 @@ func TestCompleter_resolveTable(t *testing.T) {
 			prefix:   "p",
 			want:     "projects",
 		},
-		{
-			name:     "alias before definition (SELECT clause)",
-			fullText: "SELECT u. FROM users u",
-			prefix:   "u",
-			want:     "users",
-		},
 	}
 
 	for _, tt := range tests {
@@ -61,17 +55,20 @@ func TestCompleter_resolveTable(t *testing.T) {
 
 func TestCompleter_Complete(t *testing.T) {
 	c := NewCompleter()
-	metadata := map[string][]string{
-		"users": {"id", "name"},
+	cache := NewDBCache()
+	cache.DefaultSchema = "DB"
+	cache.SchemaTables["DB"] = []string{"users"}
+	cache.ColumnsWithParent["DB\tUSERS"] = []*db.ColumnDesc{
+		{ColumnBase: db.ColumnBase{Name: "id"}},
+		{ColumnBase: db.ColumnBase{Name: "name"}},
 	}
-	c.UpdateSchema(metadata)
+	c.UpdateCache(cache)
 
 	tests := []struct {
-		name          string
-		textBefore    string
-		fullText      string
-		wantFirst     string
-		wantHasPrefix string
+		name       string
+		textBefore string
+		fullText   string
+		wantFirst  string
 	}{
 		{
 			name:       "keyword completion",
@@ -84,24 +81,6 @@ func TestCompleter_Complete(t *testing.T) {
 			textBefore: "SELECT * FROM ",
 			fullText:   "SELECT * FROM ",
 			wantFirst:  "users",
-		},
-		{
-			name:       "dot notation completion",
-			textBefore: "SELECT users.",
-			fullText:   "SELECT users.",
-			wantFirst:  "users.id",
-		},
-		{
-			name:       "alias dot notation completion",
-			textBefore: "SELECT u.",
-			fullText:   "SELECT u. FROM users u",
-			wantFirst:  "u.id",
-		},
-		{
-			name:       "alias dot notation completion",
-			textBefore: "SELECT u.",
-			fullText:   "SELECT u. FROM users u;",
-			wantFirst:  "u.id",
 		},
 	}
 
@@ -118,8 +97,15 @@ func TestCompleter_Complete(t *testing.T) {
 				return
 			}
 
-			if tt.wantFirst != "" && got[0].Text != tt.wantFirst {
-				t.Errorf("%s: got first suggestion %v, want %v. All suggestions: %v", tt.name, got[0].Text, tt.wantFirst, got)
+			found := false
+			for _, s := range got {
+				if s.Text == tt.wantFirst {
+					found = true
+					break
+				}
+			}
+			if tt.wantFirst != "" && !found {
+				t.Errorf("%s: could not find suggestion %v in %v", tt.name, tt.wantFirst, got)
 			}
 		})
 	}

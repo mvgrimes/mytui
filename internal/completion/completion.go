@@ -1,7 +1,14 @@
 package completion
 
 import (
+	"regexp"
 	"strings"
+
+	"github.com/mvgrimes/mycli-go/internal/parser"
+	"github.com/mvgrimes/mycli-go/internal/parser/ast"
+	"github.com/mvgrimes/mycli-go/internal/parser/astutil"
+	"github.com/mvgrimes/mycli-go/internal/parser/parseutil"
+	"github.com/mvgrimes/mycli-go/internal/parser/token"
 )
 
 type Suggestion struct {
@@ -61,8 +68,46 @@ type Completer struct {
 	keywords        []Suggestion
 	tables          []Suggestion
 	columns         []Suggestion
-	metadata        map[string][]string // table name -> columns
+	cache           *DBCache
 	SmartCompletion bool
+}
+
+type completionType int
+
+const (
+	_ completionType = iota
+	CompletionTypeKeyword
+	CompletionTypeFunction
+	CompletionTypeColumn
+	CompletionTypeTable
+	CompletionTypeReferencedTable
+	CompletionTypeSchema
+	CompletionTypeSubQuery
+	CompletionTypeSubQueryColumn
+	CompletionTypeJoin
+	CompletionTypeJoinOn
+)
+
+type completionParent struct {
+	Type ParentType
+	Name string
+}
+
+type ParentType int
+
+const (
+	_ ParentType = iota
+	ParentTypeNone
+	ParentTypeSchema
+	ParentTypeTable
+	ParentTypeSubQuery
+)
+
+var noneParent = &completionParent{Type: ParentTypeNone}
+
+type CompletionContext struct {
+	types  []completionType
+	parent *completionParent
 }
 
 func NewCompleter() *Completer {
@@ -73,107 +118,186 @@ func NewCompleter() *Completer {
 
 	return &Completer{
 		keywords:        suggestions,
-		metadata:        make(map[string][]string),
+		cache:           NewDBCache(),
 		SmartCompletion: true,
 	}
 }
 
 func (c *Completer) Complete(d Document) []Suggestion {
-	lineBefore := d.TextBeforeCursor()
-	word := ""
-	if lineBefore != "" {
-		lastSpace := strings.LastIndexAny(lineBefore, " \t\n\r")
-		if lastSpace == -1 {
-			word = lineBefore
-		} else {
-			word = lineBefore[lastSpace+1:]
-		}
+	if !c.SmartCompletion {
+		word := getLastWord(d.Text, d.CursorPosition)
+		return filterHasPrefix(c.keywords, word, true)
 	}
 
-	fullText := d.Text
-	upperLineBefore := strings.ToUpper(lineBefore)
-	wordsBefore := strings.Fields(upperLineBefore)
-
-	// 0. Handle special commands: \f
-	if strings.HasPrefix(lineBefore, "\\") {
-		parts := strings.Fields(lineBefore)
-		if len(parts) == 0 {
-			return specialCommands
-		}
-		if parts[0] == "\\T" || parts[0] == "\\t" || parts[0] == "\\once" {
-			// If we are exactly at "\T " or "\once ", suggest formats
-			if strings.HasSuffix(lineBefore, " ") && len(parts) == 1 {
-				return formatTypes
-			}
-			// If we are mid-word after command, filter formats
-			if len(parts) == 2 {
-				return filterHasPrefix(formatTypes, parts[1], true)
-			}
-			return specialCommands
-		}
-		return filterHasPrefix(specialCommands, word, true)
+	parsed, err := parser.Parse(d.Text)
+	if err != nil {
+		// Fallback to simple completion if parse fails
+		word := getLastWord(d.Text, d.CursorPosition)
+		return filterHasPrefix(c.keywords, word, true)
 	}
+
+	// Calculate cursor position in terms of Line and Col
+	pos := calculatePos(d.Text, d.CursorPosition)
+
+	nodeWalker := parseutil.NewNodeWalker(parsed, pos)
+	ctx := getCompletionTypes(nodeWalker)
+
+	definedTables, _ := parseutil.ExtractTable(parsed, pos)
+	// definedSubQueries, _ := parseutil.ExtractSubQueryViews(parsed, pos)
+
+	lastWord := getLastWord(d.Text, d.CursorPosition)
+	// withBackQuote := strings.HasPrefix(lastWord, "`")
 
 	var suggestions []Suggestion
 
-	if !c.SmartCompletion {
+	if completionTypeIs(ctx.types, CompletionTypeColumn) {
+		suggestions = append(suggestions, c.columnCandidates(definedTables, ctx.parent)...)
+	}
+	if completionTypeIs(ctx.types, CompletionTypeTable) {
+		suggestions = append(suggestions, c.tableCandidates(ctx.parent, definedTables)...)
+	}
+	if completionTypeIs(ctx.types, CompletionTypeKeyword) {
 		suggestions = append(suggestions, c.keywords...)
-		return filterHasPrefix(suggestions, word, true)
 	}
 
-	// 1. Handle aliased/table qualified columns: "SELECT t.^" or "WHERE alias.^"
-	if strings.Contains(word, ".") {
-		parts := strings.Split(word, ".")
-		prefix := parts[0]
+	return filterHasPrefix(suggestions, lastWord, true)
+}
 
-		// Resolve prefix to a table name using FULL text of the document
-		tableName := c.resolveTable(fullText, prefix)
-		if cols, ok := c.metadata[tableName]; ok {
-			var dotSuggestions []Suggestion
-			for _, col := range cols {
-				dotSuggestions = append(dotSuggestions, Suggestion{
-					Text:        prefix + "." + col,
-					Description: "column of " + tableName,
-				})
-			}
-			// If we're at "alias.", we only want to show that table's columns
-			return filterHasPrefix(dotSuggestions, word, true)
+func calculatePos(text string, cursor int) token.Pos {
+	line := 0
+	col := 0
+	for i := 0; i < cursor && i < len(text); i++ {
+		if text[i] == '\n' {
+			line++
+			col = 0
+		} else {
+			col++
 		}
 	}
+	return token.Pos{Line: line, Col: col}
+}
 
-	if len(wordsBefore) > 0 {
-		lastWord := wordsBefore[len(wordsBefore)-1]
-		// 2. Prioritize tables after certain keywords
-		if (word == "" || word == lastWord) && (lastWord == "FROM" || lastWord == "JOIN" || lastWord == "UPDATE" || lastWord == "INTO" || lastWord == "TABLE") {
-			suggestions = append(suggestions, c.tables...)
-			// If we are word-less, just return table suggestions
-			if word == "" {
-				return suggestions
-			}
+func completionTypeIs(types []completionType, expect completionType) bool {
+	for _, t := range types {
+		if t == expect {
+			return true
 		}
 	}
+	return false
+}
 
-	// 3. Prioritize columns from tables already mentioned in the query
-	mentionedTables := c.extractMentionedTables(fullText)
-	if len(mentionedTables) > 0 {
-		for _, tableName := range mentionedTables {
-			if cols, ok := c.metadata[tableName]; ok {
+func getCompletionTypes(nw *parseutil.NodeWalker) *CompletionContext {
+	memberIdentifierMatcher := astutil.NodeMatcher{
+		NodeTypes: []ast.NodeType{ast.TypeMemberIdentifier},
+	}
+
+	syntaxPos := parseutil.CheckSyntaxPosition(nw)
+	var t []completionType
+	p := noneParent
+	switch {
+	case syntaxPos == parseutil.ColName:
+		if nw.CurNodeIs(memberIdentifierMatcher) {
+			mi := nw.CurNodeTopMatched(memberIdentifierMatcher).(*ast.MemberIdentifier)
+			t = []completionType{CompletionTypeColumn, CompletionTypeSubQueryColumn}
+			p = &completionParent{
+				Type: ParentTypeTable,
+				Name: mi.Parent.String(),
+			}
+		} else {
+			t = []completionType{CompletionTypeColumn, CompletionTypeTable, CompletionTypeFunction}
+			p = noneParent
+		}
+	case syntaxPos == parseutil.SelectExpr || syntaxPos == parseutil.CaseValue:
+		if nw.CurNodeIs(memberIdentifierMatcher) {
+			mi := nw.CurNodeTopMatched(memberIdentifierMatcher).(*ast.MemberIdentifier)
+			t = []completionType{CompletionTypeColumn}
+			p = &completionParent{
+				Type: ParentTypeTable,
+				Name: mi.ParentTok.NoQuoteString(),
+			}
+		} else {
+			t = []completionType{CompletionTypeColumn, CompletionTypeTable, CompletionTypeFunction}
+		}
+	case syntaxPos == parseutil.TableReference:
+		if nw.CurNodeIs(memberIdentifierMatcher) {
+			mi := nw.CurNodeTopMatched(memberIdentifierMatcher).(*ast.MemberIdentifier)
+			t = []completionType{CompletionTypeTable}
+			p = &completionParent{
+				Type: ParentTypeSchema,
+				Name: mi.ParentTok.NoQuoteString(),
+			}
+		} else {
+			t = []completionType{CompletionTypeTable, CompletionTypeSchema}
+		}
+	case syntaxPos == parseutil.WhereCondition:
+		t = []completionType{CompletionTypeColumn, CompletionTypeFunction}
+	default:
+		t = []completionType{CompletionTypeKeyword}
+	}
+	return &CompletionContext{
+		types:  t,
+		parent: p,
+	}
+}
+
+func (c *Completer) columnCandidates(targetTables []*parseutil.TableInfo, parent *completionParent) []Suggestion {
+	var candidates []Suggestion
+
+	switch parent.Type {
+	case ParentTypeNone:
+		for _, table := range targetTables {
+			if cols, ok := c.cache.ColumnDescs(table.Name); ok {
 				for _, col := range cols {
-					suggestions = append(suggestions, Suggestion{
-						Text:        col,
-						Description: "column of " + tableName,
+					candidates = append(candidates, Suggestion{
+						Text:        col.Name,
+						Description: "column of " + table.Name,
+					})
+				}
+			}
+		}
+	case ParentTypeTable:
+		for _, table := range targetTables {
+			if table.Name != parent.Name && table.Alias != parent.Name {
+				continue
+			}
+			if cols, ok := c.cache.ColumnDescs(table.Name); ok {
+				for _, col := range cols {
+					candidates = append(candidates, Suggestion{
+						Text:        parent.Name + "." + col.Name,
+						Description: "column of " + table.Name,
 					})
 				}
 			}
 		}
 	}
+	return candidates
+}
 
-	// 4. Default: keywords, tables, then all columns
-	suggestions = append(suggestions, c.keywords...)
-	suggestions = append(suggestions, c.tables...)
-	suggestions = append(suggestions, c.columns...)
+func (c *Completer) tableCandidates(parent *completionParent, targetTables []*parseutil.TableInfo) []Suggestion {
+	var candidates []Suggestion
+	switch parent.Type {
+	case ParentTypeNone:
+		for _, table := range c.cache.SortedTables() {
+			candidates = append(candidates, Suggestion{Text: table, Description: "table"})
+		}
+	case ParentTypeSchema:
+		if tables, ok := c.cache.SortedTablesByDBName(parent.Name); ok {
+			for _, table := range tables {
+				candidates = append(candidates, Suggestion{Text: table, Description: "table"})
+			}
+		}
+	}
+	return candidates
+}
 
-	return filterHasPrefix(suggestions, word, true)
+func getLastWord(text string, cursor int) string {
+	if cursor <= 0 {
+		return ""
+	}
+	sub := text[:cursor]
+	reg := regexp.MustCompile("[\\w\\.`]+$")
+	match := reg.FindString(sub)
+	return match
 }
 
 func filterHasPrefix(suggestions []Suggestion, sub string, ignoreCase bool) []Suggestion {
@@ -204,7 +328,7 @@ func (c *Completer) resolveTable(fullText, prefix string) string {
 	upperPrefix := strings.ToUpper(prefix)
 
 	// Check if prefix is an actual table name
-	for tableName := range c.metadata {
+	for _, tableName := range c.cache.SortedTables() {
 		if strings.ToUpper(tableName) == upperPrefix {
 			return tableName
 		}
@@ -217,7 +341,7 @@ func (c *Completer) resolveTable(fullText, prefix string) string {
 
 	for i := 0; i < len(words)-1; i++ {
 		// Look for table name
-		for tableName := range c.metadata {
+		for _, tableName := range c.cache.SortedTables() {
 			if strings.ToUpper(tableName) == words[i] {
 				// Potential match: "TableName Alias" or "TableName AS Alias"
 				// We check if the next word (or the one after AS) matches our prefix
@@ -240,7 +364,7 @@ func (c *Completer) extractMentionedTables(fullText string) []string {
 	cleanText := " " + strings.NewReplacer(",", " ", "\n", " ", "\t", " ", ".", " ").Replace(upperText) + " "
 
 	var mentioned []string
-	for tableName := range c.metadata {
+	for _, tableName := range c.cache.SortedTables() {
 		upperTableName := " " + strings.ToUpper(tableName) + " "
 		if strings.Contains(cleanText, upperTableName) {
 			mentioned = append(mentioned, tableName)
@@ -249,15 +373,20 @@ func (c *Completer) extractMentionedTables(fullText string) []string {
 	return mentioned
 }
 
-func (c *Completer) UpdateSchema(metadata map[string][]string) {
-	c.metadata = metadata
-	c.tables = make([]Suggestion, 0, len(metadata))
-
+func (c *Completer) UpdateCache(cache *DBCache) {
+	c.cache = cache
+	c.tables = make([]Suggestion, 0)
 	columnSet := make(map[string]struct{})
-	for table, columns := range metadata {
-		c.tables = append(c.tables, Suggestion{Text: table, Description: "table"})
-		for _, col := range columns {
-			columnSet[col] = struct{}{}
+
+	for _, schema := range cache.SortedSchemas() {
+		tables, _ := cache.SortedTablesByDBName(schema)
+		for _, table := range tables {
+			c.tables = append(c.tables, Suggestion{Text: table, Description: "table"})
+			if cols, ok := cache.ColumnDatabase(schema, table); ok {
+				for _, col := range cols {
+					columnSet[col.Name] = struct{}{}
+				}
+			}
 		}
 	}
 

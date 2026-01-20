@@ -155,8 +155,143 @@ func (c *Connection) ExecuteQuery(query string) (*Result, error) {
 	}
 }
 
-func (c *Connection) GetTables() ([]string, error) {
-	rows, err := c.db.Query("SHOW TABLES")
+func (c *Connection) GetSchemas() ([]string, error) {
+	rows, err := c.db.Query("SHOW DATABASES")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var schemas []string
+	for rows.Next() {
+		var schema string
+		if err := rows.Scan(&schema); err != nil {
+			return nil, err
+		}
+		schemas = append(schemas, schema)
+	}
+	return schemas, nil
+}
+
+func (c *Connection) GetSchemaTables() (map[string][]string, error) {
+	schemas, err := c.GetSchemas()
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string][]string)
+	for _, s := range schemas {
+		rows, err := c.db.Query(fmt.Sprintf("SHOW TABLES FROM `%s`", s))
+		if err != nil {
+			continue
+		}
+		var tables []string
+		for rows.Next() {
+			var table string
+			if err := rows.Scan(&table); err != nil {
+				continue
+			}
+			tables = append(tables, table)
+		}
+		rows.Close()
+		res[s] = tables
+	}
+	return res, nil
+}
+
+func (c *Connection) DescribeDatabaseTableBySchema(schema string) ([]*ColumnDesc, error) {
+	query := fmt.Sprintf(`
+		SELECT 
+			TABLE_SCHEMA, 
+			TABLE_NAME, 
+			COLUMN_NAME, 
+			COLUMN_TYPE, 
+			IS_NULLABLE, 
+			COLUMN_KEY, 
+			COLUMN_DEFAULT, 
+			EXTRA 
+		FROM information_schema.COLUMNS 
+		WHERE TABLE_SCHEMA = '%s'
+	`, schema)
+
+	rows, err := c.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var columns []*ColumnDesc
+	for rows.Next() {
+		var desc ColumnDesc
+		err := rows.Scan(
+			&desc.Schema,
+			&desc.Table,
+			&desc.Name,
+			&desc.Type,
+			&desc.Null,
+			&desc.Key,
+			&desc.Default,
+			&desc.Extra,
+		)
+		if err != nil {
+			return nil, err
+		}
+		columns = append(columns, &desc)
+	}
+	return columns, nil
+}
+
+func (c *Connection) DescribeForeignKeysBySchema(schema string) ([]*ForeignKey, error) {
+	query := fmt.Sprintf(`
+		SELECT 
+			CONSTRAINT_NAME, 
+			TABLE_NAME, 
+			COLUMN_NAME, 
+			REFERENCED_TABLE_NAME, 
+			REFERENCED_COLUMN_NAME 
+		FROM information_schema.KEY_COLUMN_USAGE 
+		WHERE TABLE_SCHEMA = '%s' 
+			AND REFERENCED_TABLE_NAME IS NOT NULL
+	`, schema)
+
+	rows, err := c.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var fks []*ForeignKey
+	var lastConstraint string
+	var currentFk *ForeignKey
+
+	for rows.Next() {
+		var constraint, table, column, refTable, refColumn string
+		if err := rows.Scan(&constraint, &table, &column, &refTable, &refColumn); err != nil {
+			return nil, err
+		}
+
+		if constraint != lastConstraint {
+			if currentFk != nil {
+				fks = append(fks, currentFk)
+			}
+			currentFk = &ForeignKey{}
+			lastConstraint = constraint
+		}
+
+		*currentFk = append(*currentFk, [2]*ColumnBase{
+			{Schema: schema, Table: table, Name: column},
+			{Schema: schema, Table: refTable, Name: refColumn},
+		})
+	}
+	if currentFk != nil {
+		fks = append(fks, currentFk)
+	}
+
+	return fks, nil
+}
+
+func (c *Connection) GetTablesFromSchema(schema string) ([]string, error) {
+	rows, err := c.db.Query(fmt.Sprintf("SHOW TABLES FROM `%s`", schema))
 	if err != nil {
 		return nil, err
 	}
@@ -166,13 +301,12 @@ func (c *Connection) GetTables() ([]string, error) {
 	for rows.Next() {
 		var table string
 		if err := rows.Scan(&table); err != nil {
-			return nil, err
+			continue
 		}
 		tables = append(tables, table)
 	}
 	return tables, nil
 }
-
 func (c *Connection) GetColumns(table string) ([]string, error) {
 	rows, err := c.db.Query(fmt.Sprintf("SHOW COLUMNS FROM %s", table))
 	if err != nil {
