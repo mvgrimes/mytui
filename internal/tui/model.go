@@ -31,6 +31,7 @@ type Model struct {
 	focus          Focus
 	history        []string
 	historyIndex   int
+	vimPendingKey  string
 	err            error
 	width          int
 	height         int

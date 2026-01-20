@@ -121,7 +121,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.focus == FocusQuery {
 			if m.vimState.Mode == vim.NormalMode {
-				switch msg.String() {
+				keyStr := msg.String()
+				switch keyStr {
 				case "i":
 					m.vimState.Mode = vim.InsertMode
 					return m, m.textarea.Focus()
@@ -138,7 +139,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textarea.CursorStart()
 					return m, m.textarea.Focus()
 				case "h":
-
 					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyLeft})
 				case "l":
 					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRight})
@@ -147,7 +147,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case "k":
 					m.textarea.CursorUp()
 				case "w":
-					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRight, Alt: true})
+					if m.vimPendingKey == "d" {
+						m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}, Alt: true})
+						m.vimPendingKey = ""
+					} else if m.vimPendingKey == "c" {
+						m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}, Alt: true})
+						m.vimState.Mode = vim.InsertMode
+						m.vimPendingKey = ""
+						return m, m.textarea.Focus()
+					} else {
+						m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRight, Alt: true})
+					}
 				case "b":
 					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyLeft, Alt: true})
 				case "0", "^":
@@ -165,13 +175,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
 					m.textarea.CursorUp()
 					return m, m.textarea.Focus()
+				case "D":
+					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+				case "C":
+					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+					m.vimState.Mode = vim.InsertMode
+					return m, m.textarea.Focus()
+				case "d":
+					if m.vimPendingKey == "d" {
+						// Delete current line
+						m.textarea.CursorStart()
+						m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+						// If there's a line below, delete the newline character too
+						// But textarea' Ctrl+K might not delete the line itself if it's empty?
+						// Actually, if we are at start of line, Ctrl+K deletes the whole line content.
+						// We might need to delete the line break if we want true 'dd'.
+						m.vimPendingKey = ""
+					} else {
+						m.vimPendingKey = "d"
+					}
+					return m, nil
+				case "c":
+					if m.vimPendingKey == "c" {
+						// Change current line
+						m.textarea.CursorStart()
+						m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+						m.vimState.Mode = vim.InsertMode
+						m.vimPendingKey = ""
+						return m, m.textarea.Focus()
+					} else {
+						m.vimPendingKey = "c"
+					}
+					return m, nil
 				case "x":
 					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
+				default:
+					m.vimPendingKey = ""
 				}
-				// We still need to call Update for blinking etc, but we already handled the key.
-				// So we'll fall through to the end where Update is called with non-key messages.
+				if keyStr != "d" && keyStr != "c" {
+					m.vimPendingKey = ""
+				}
 				return m, nil
 			} else {
+
 				// Insert Mode
 				if msg.Type == tea.KeyEsc {
 					m.vimState.Mode = vim.NormalMode
