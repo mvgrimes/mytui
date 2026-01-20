@@ -156,6 +156,10 @@ func (c *Completer) Complete(d Document) []Suggestion {
 	if completionTypeIs(ctx.types, CompletionTypeTable) {
 		suggestions = append(suggestions, c.tableCandidates(ctx.parent, definedTables)...)
 	}
+	if completionTypeIs(ctx.types, CompletionTypeFunction) {
+		// Just keywords for now as placeholders for functions
+		suggestions = append(suggestions, c.keywords...)
+	}
 	if completionTypeIs(ctx.types, CompletionTypeKeyword) {
 		suggestions = append(suggestions, c.keywords...)
 	}

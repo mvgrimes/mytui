@@ -182,6 +182,55 @@ func (m *Model) ExecuteQueryWithFormat(query string, format formatter.Format) {
 	m.pagerOverride = ""
 }
 
+func (m *Model) fetchCache() (*completion.DBCache, error) {
+	cache := completion.NewDBCache()
+	cache.DefaultSchema = m.conn.GetCurrentDatabase()
+
+	schemas, err := m.conn.GetSchemas()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, s := range schemas {
+		cache.Schemas[strings.ToUpper(s)] = s
+		tables, err := m.conn.GetTablesFromSchema(s)
+		if err != nil {
+			continue
+		}
+		cache.SchemaTables[strings.ToUpper(s)] = tables
+
+		cols, err := m.conn.DescribeDatabaseTableBySchema(s)
+		if err == nil {
+			for _, col := range cols {
+				key := strings.ToUpper(s) + "\t" + strings.ToUpper(col.Table)
+				cache.ColumnsWithParent[key] = append(cache.ColumnsWithParent[key], col)
+			}
+		}
+
+		fks, err := m.conn.DescribeForeignKeysBySchema(s)
+		if err == nil {
+			for _, fk := range fks {
+				if len(*fk) > 0 {
+					table := (*fk)[0][0].Table
+					refTable := (*fk)[0][1].Table
+
+					if cache.ForeignKeys[table] == nil {
+						cache.ForeignKeys[table] = make(map[string][]*db.ForeignKey)
+					}
+					cache.ForeignKeys[table][refTable] = append(cache.ForeignKeys[table][refTable], fk)
+
+					if cache.ForeignKeys[refTable] == nil {
+						cache.ForeignKeys[refTable] = make(map[string][]*db.ForeignKey)
+					}
+					cache.ForeignKeys[refTable][table] = append(cache.ForeignKeys[refTable][table], fk)
+				}
+			}
+		}
+	}
+
+	return cache, nil
+}
+
 func (m *Model) cursorPosition() int {
 	text := m.textarea.Value()
 	lines := strings.Split(text, "\n")

@@ -10,6 +10,7 @@ import (
 	"github.com/alecthomas/chroma/v2/lexers"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mvgrimes/mycli-go/internal/completion"
 	"github.com/mvgrimes/mycli-go/internal/formatter"
 	"github.com/mvgrimes/mycli-go/internal/parser"
 	"github.com/mvgrimes/mycli-go/internal/special"
@@ -45,7 +46,7 @@ var (
 )
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return m.refreshCacheCmd()
 }
 
 func (m *Model) saveToHistory(line string) {
@@ -79,6 +80,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	)
 
 	switch msg := msg.(type) {
+	case *completion.DBCache:
+		m.completer.UpdateCache(msg)
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.showMenu {
 			switch msg.String() {
@@ -373,6 +378,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(tiCmd, vpCmd)
 }
 
+func (m Model) refreshCacheCmd() tea.Cmd {
+	return func() tea.Msg {
+		cache, err := m.fetchCache()
+		if err != nil {
+			return nil
+		}
+		return cache
+	}
+}
+
 func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 	trimmedQuery := strings.TrimSpace(query)
 	lowerQuery := strings.ToLower(trimmedQuery)
@@ -431,6 +446,14 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 		m.textarea.Reset()
 		m.focus = FocusResults
 		m.textarea.Blur()
+
+		upperQuery := strings.ToUpper(trimmedQuery)
+		if strings.HasPrefix(upperQuery, "USE") ||
+			strings.HasPrefix(upperQuery, "CREATE") ||
+			strings.HasPrefix(upperQuery, "DROP") ||
+			strings.HasPrefix(upperQuery, "ALTER") {
+			return m, m.refreshCacheCmd()
+		}
 	}
 
 	return m, nil
