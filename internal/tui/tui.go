@@ -587,11 +587,21 @@ func (m Model) View() string {
 		qHeader = headerFocusStyle.Render(queryHeaderStr)
 	}
 
+	renderedStatus := statusBarStyle.Render(status)
+	renderedMode := modeStyle.Render(mode)
+	fillerWidth := m.width - lipgloss.Width(renderedStatus) - lipgloss.Width(renderedMode)
+	if fillerWidth < 0 {
+		fillerWidth = 0
+	}
+
 	statusLine := lipgloss.JoinHorizontal(lipgloss.Bottom,
-		statusBarStyle.Render(status),
-		lipgloss.NewStyle().Width(m.width-lipgloss.Width(status)-lipgloss.Width(mode)).Render(""),
-		modeStyle.Render(mode),
+		renderedStatus,
+		lipgloss.NewStyle().Width(fillerWidth).Render(""),
+		renderedMode,
 	)
+
+	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Margin(0, 1)
+	helpText := helpStyle.Render("Ctrl+K: autocomplete • Ctrl+Space: menu • Ctrl+P/N: history • Tab: switch focus")
 
 	queryView := m.renderQueryArea()
 
@@ -601,6 +611,7 @@ func (m Model) View() string {
 		m.viewport.View(),
 		qHeader,
 		queryView,
+		helpText,
 		statusLine,
 	)
 
