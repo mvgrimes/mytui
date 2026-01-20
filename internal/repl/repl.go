@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -161,8 +162,10 @@ func (r *REPL) formatPrompt() string {
 	// Handle product type (\t) - for now just MySQL
 	p = strings.ReplaceAll(p, "\\t", "mysql")
 
-	// Handle ANSI escape sequences (\x1b)
+	// Handle ANSI escape sequences
 	p = strings.ReplaceAll(p, "\\x1b", "\x1b")
+	p = strings.ReplaceAll(p, "\\033", "\x1b")
+	p = strings.ReplaceAll(p, "\\e", "\x1b")
 
 	return p
 }
