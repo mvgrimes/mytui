@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mvgrimes/mycli-go/internal/formatter"
@@ -43,7 +42,7 @@ var (
 )
 
 func (m Model) Init() tea.Cmd {
-	return textarea.Blink
+	return nil
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -258,17 +257,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Apply cursor style based on mode
-	if m.vimState.Mode == vim.NormalMode {
-		m.textarea.Cursor.Style = lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF"))
-	} else {
-		// Try to make it look like a bar using a left border
-		m.textarea.Cursor.Style = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00AAFF")).
-			Border(lipgloss.NormalBorder(), false, false, false, true).
-			BorderForeground(lipgloss.Color("#00AAFF"))
-	}
-
 	// Always update viewports for non-key messages or if focused
 	_, isKey := msg.(tea.KeyMsg)
 	if !isKey || m.focus == FocusResults {
@@ -372,6 +360,7 @@ func (m *Model) saveToHistory(line string) {
 }
 
 func (m Model) View() string {
+	m.UpdateCursorStyle()
 	status := fmt.Sprintf(" %s@%s:%d/%s ",
 		m.conn.Config.User, m.conn.Config.Host, m.conn.Config.Port, m.conn.GetCurrentDatabase())
 

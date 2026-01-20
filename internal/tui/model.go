@@ -8,8 +8,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/mvgrimes/mycli-go/internal/completion"
 	"github.com/mvgrimes/mycli-go/internal/config"
 	"github.com/mvgrimes/mycli-go/internal/db"
@@ -53,6 +55,7 @@ func NewModel(conn *db.Connection, cfg *config.Config) Model {
 	ta.Focus()
 	ta.SetWidth(80)
 	ta.SetHeight(3)
+	ta.Cursor.SetMode(cursor.CursorStatic)
 
 	vp := viewport.New(80, 20)
 	vp.SetContent("Welcome to mycli-go!")
@@ -61,7 +64,7 @@ func NewModel(conn *db.Connection, cfg *config.Config) Model {
 
 	history, _ := loadHistory(cfg.HistoryFile)
 
-	return Model{
+	m := Model{
 		textarea:       ta,
 		viewport:       vp,
 		headerViewport: hvp,
@@ -74,6 +77,8 @@ func NewModel(conn *db.Connection, cfg *config.Config) Model {
 		historyIndex:   len(history),
 		currentFormat:  formatter.Format(cfg.TableFormat),
 	}
+	m.UpdateCursorStyle()
+	return m
 }
 
 func (m *Model) GetConn() *db.Connection             { return m.conn }
@@ -97,6 +102,18 @@ func (m *Model) ExecuteQueryWithFormat(query string, format formatter.Format) {
 	// We use RenderResult instead of PrintResult to avoid pager in TUI
 	formatter.RenderResult(result, &m.specialOutput, format, m.config)
 	m.pagerOverride = ""
+}
+
+func (m *Model) UpdateCursorStyle() {
+	if m.focus != FocusQuery || m.vimState.Mode == vim.NormalMode {
+		m.textarea.Cursor.Style = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC"))
+	} else {
+		// Try to make it look like a bar using a left border
+		m.textarea.Cursor.Style = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#00AAFF")).
+			Border(lipgloss.NormalBorder(), false, false, false, true).
+			BorderForeground(lipgloss.Color("#00AAFF"))
+	}
 }
 
 func loadHistory(filename string) ([]string, []string) {
