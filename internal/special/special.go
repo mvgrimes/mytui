@@ -106,7 +106,9 @@ func handleFavoriteSave(line string, parts []string, r REPL) {
 	if cfg.FavoriteQueries == nil {
 		cfg.FavoriteQueries = make(map[string]string)
 	}
-	cfg.FavoriteQueries[name] = query
+	// Store newlines as \n
+	safeQuery := strings.ReplaceAll(query, "\n", "\\n")
+	cfg.FavoriteQueries[name] = safeQuery
 
 	viper.Set("favorite_queries", cfg.FavoriteQueries)
 	if err := viper.WriteConfig(); err != nil {
@@ -135,6 +137,9 @@ func handleFavorite(parts []string, r REPL) {
 		fmt.Printf("Favorite query '%s' not found\n", name)
 		return
 	}
+
+	// Restore newlines
+	query = strings.ReplaceAll(query, "\\n", "\n")
 
 	// Handle parameters $1, $2, etc.
 	for i := 2; i < len(parts); i++ {
