@@ -110,14 +110,14 @@ func RunREPL(conn *db.Connection, cfg *config.Config) {
 	if r.config.KeyBindings == "vim" {
 		options = append(options,
 			prompt.OptionSwitchKeyBindMode(prompt.CommonKeyBind),
-			prompt.OptionAddKeyBind(r.vimState.GetKeyBindings()...),
-			prompt.OptionAddASCIICodeBind(r.vimState.GetASCIICodeBindings()...),
+			prompt.OptionAddKeyBind(r.getVimKeyBindings()...),
+			prompt.OptionAddASCIICodeBind(r.getVimASCIICodeBindings()...),
 		)
 	}
 
 	p := prompt.New(
 		r.executor,
-		r.completer.Complete,
+		r.completerBridge,
 		options...,
 	)
 	p.Run()

@@ -98,6 +98,11 @@ func PrintResult(result *db.Result, out io.Writer, format Format, cfg *config.Co
 		}
 	}
 
+	RenderResult(result, writer, format, cfg)
+}
+
+// RenderResult draws the result to the provided writer
+func RenderResult(result *db.Result, writer io.Writer, format Format, cfg *config.Config) {
 	if len(result.Headers) > 0 {
 		switch format {
 		case FormatVertical:
@@ -118,6 +123,13 @@ func PrintResult(result *db.Result, out io.Writer, format Format, cfg *config.Co
 	} else {
 		fmt.Fprintf(writer, "%s\n", result.Status)
 	}
+}
+
+// FormatResult returns the formatted result as a string
+func FormatResult(result *db.Result, format Format, cfg *config.Config) string {
+	var buf bytes.Buffer
+	RenderResult(result, &buf, format, cfg)
+	return buf.String()
 }
 
 func getTerminalWidth() int {

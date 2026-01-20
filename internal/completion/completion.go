@@ -2,9 +2,27 @@ package completion
 
 import (
 	"strings"
-
-	"github.com/c-bata/go-prompt"
 )
+
+type Suggestion struct {
+	Text        string
+	Description string
+}
+
+type Document struct {
+	Text           string
+	CursorPosition int
+}
+
+func (d Document) TextBeforeCursor() string {
+	if d.CursorPosition < 0 {
+		return ""
+	}
+	if d.CursorPosition > len(d.Text) {
+		return d.Text
+	}
+	return d.Text[:d.CursorPosition]
+}
 
 var sqlKeywords = []string{
 	"SELECT", "INSERT", "UPDATE", "DELETE", "FROM", "WHERE", "AND", "OR", "LIMIT",
@@ -17,7 +35,7 @@ var sqlKeywords = []string{
 	"COMMIT", "ROLLBACK", "TRANSACTION", "VALUES", "INTO", "TRUNCATE",
 }
 
-var specialCommands = []prompt.Suggest{
+var specialCommands = []Suggestion{
 	{Text: "\\T", Description: "Change output format"},
 	{Text: "\\f", Description: "Execute favorite query"},
 	{Text: "\\fs", Description: "Save favorite query"},
@@ -31,7 +49,7 @@ var specialCommands = []prompt.Suggest{
 	{Text: "\\e", Description: "Open external editor"},
 }
 
-var formatTypes = []prompt.Suggest{
+var formatTypes = []Suggestion{
 	{Text: "table", Description: "Standard table format"},
 	{Text: "vertical", Description: "Vertical format (like \\G)"},
 	{Text: "csv", Description: "Comma-separated values"},
@@ -40,17 +58,17 @@ var formatTypes = []prompt.Suggest{
 }
 
 type Completer struct {
-	keywords        []prompt.Suggest
-	tables          []prompt.Suggest
-	columns         []prompt.Suggest
+	keywords        []Suggestion
+	tables          []Suggestion
+	columns         []Suggestion
 	metadata        map[string][]string // table name -> columns
 	SmartCompletion bool
 }
 
 func NewCompleter() *Completer {
-	suggestions := make([]prompt.Suggest, len(sqlKeywords))
+	suggestions := make([]Suggestion, len(sqlKeywords))
 	for i, k := range sqlKeywords {
-		suggestions[i] = prompt.Suggest{Text: k}
+		suggestions[i] = Suggestion{Text: k}
 	}
 
 	return &Completer{
@@ -60,8 +78,7 @@ func NewCompleter() *Completer {
 	}
 }
 
-func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
-	// ... (word extraction part)
+func (c *Completer) Complete(d Document) []Suggestion {
 	lineBefore := d.TextBeforeCursor()
 	word := ""
 	if lineBefore != "" {
@@ -79,7 +96,6 @@ func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
 
 	// 0. Handle special commands: \f
 	if strings.HasPrefix(lineBefore, "\\") {
-		// ... (special command handling)
 		parts := strings.Fields(lineBefore)
 		if len(parts) == 0 {
 			return specialCommands
@@ -91,18 +107,18 @@ func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
 			}
 			// If we are mid-word after command, filter formats
 			if len(parts) == 2 {
-				return prompt.FilterHasPrefix(formatTypes, parts[1], true)
+				return filterHasPrefix(formatTypes, parts[1], true)
 			}
 			return specialCommands
 		}
-		return prompt.FilterHasPrefix(specialCommands, word, true)
+		return filterHasPrefix(specialCommands, word, true)
 	}
 
-	var suggestions []prompt.Suggest
+	var suggestions []Suggestion
 
 	if !c.SmartCompletion {
 		suggestions = append(suggestions, c.keywords...)
-		return prompt.FilterHasPrefix(suggestions, word, true)
+		return filterHasPrefix(suggestions, word, true)
 	}
 
 	// 1. Handle aliased/table qualified columns: "SELECT t.^" or "WHERE alias.^"
@@ -113,15 +129,15 @@ func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
 		// Resolve prefix to a table name using FULL text of the document
 		tableName := c.resolveTable(fullText, prefix)
 		if cols, ok := c.metadata[tableName]; ok {
-			var dotSuggestions []prompt.Suggest
+			var dotSuggestions []Suggestion
 			for _, col := range cols {
-				dotSuggestions = append(dotSuggestions, prompt.Suggest{
+				dotSuggestions = append(dotSuggestions, Suggestion{
 					Text:        prefix + "." + col,
 					Description: "column of " + tableName,
 				})
 			}
 			// If we're at "alias.", we only want to show that table's columns
-			return prompt.FilterHasPrefix(dotSuggestions, word, true)
+			return filterHasPrefix(dotSuggestions, word, true)
 		}
 	}
 
@@ -130,7 +146,7 @@ func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
 		// 2. Prioritize tables after certain keywords
 		if (word == "" || word == lastWord) && (lastWord == "FROM" || lastWord == "JOIN" || lastWord == "UPDATE" || lastWord == "INTO" || lastWord == "TABLE") {
 			suggestions = append(suggestions, c.tables...)
-			// If we are mid-word, FilterHasPrefix will be applied later
+			// If we are word-less, just return table suggestions
 			if word == "" {
 				return suggestions
 			}
@@ -143,7 +159,7 @@ func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
 		for _, tableName := range mentionedTables {
 			if cols, ok := c.metadata[tableName]; ok {
 				for _, col := range cols {
-					suggestions = append(suggestions, prompt.Suggest{
+					suggestions = append(suggestions, Suggestion{
 						Text:        col,
 						Description: "column of " + tableName,
 					})
@@ -157,8 +173,30 @@ func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
 	suggestions = append(suggestions, c.tables...)
 	suggestions = append(suggestions, c.columns...)
 
-	return prompt.FilterHasPrefix(suggestions, word, true)
+	return filterHasPrefix(suggestions, word, true)
 }
+
+func filterHasPrefix(suggestions []Suggestion, sub string, ignoreCase bool) []Suggestion {
+	if sub == "" {
+		return suggestions
+	}
+	if ignoreCase {
+		sub = strings.ToUpper(sub)
+	}
+	res := make([]Suggestion, 0, len(suggestions))
+	for _, s := range suggestions {
+		text := s.Text
+		if ignoreCase {
+			text = strings.ToUpper(text)
+		}
+		if strings.HasPrefix(text, sub) {
+			res = append(res, s)
+		}
+	}
+	return res
+}
+
+// ... (remaining methods)
 
 // resolveTable attempts to map an alias or table name to an actual table in metadata
 func (c *Completer) resolveTable(fullText, prefix string) string {
@@ -213,18 +251,18 @@ func (c *Completer) extractMentionedTables(fullText string) []string {
 
 func (c *Completer) UpdateSchema(metadata map[string][]string) {
 	c.metadata = metadata
-	c.tables = make([]prompt.Suggest, 0, len(metadata))
+	c.tables = make([]Suggestion, 0, len(metadata))
 
 	columnSet := make(map[string]struct{})
 	for table, columns := range metadata {
-		c.tables = append(c.tables, prompt.Suggest{Text: table, Description: "table"})
+		c.tables = append(c.tables, Suggestion{Text: table, Description: "table"})
 		for _, col := range columns {
 			columnSet[col] = struct{}{}
 		}
 	}
 
-	c.columns = make([]prompt.Suggest, 0, len(columnSet))
+	c.columns = make([]Suggestion, 0, len(columnSet))
 	for col := range columnSet {
-		c.columns = append(c.columns, prompt.Suggest{Text: col, Description: "column"})
+		c.columns = append(c.columns, Suggestion{Text: col, Description: "column"})
 	}
 }

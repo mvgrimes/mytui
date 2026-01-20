@@ -1,28 +1,8 @@
 package completion
 
 import (
-	"reflect"
 	"testing"
-	"unsafe"
-
-	"github.com/c-bata/go-prompt"
 )
-
-// Helper to create Document with cursor position since fields are unexported
-func NewDocument(text string, cursorPosition int) prompt.Document {
-	d := prompt.Document{Text: text}
-
-	// Use reflection and unsafe to set unexported cursorPosition
-	v := reflect.ValueOf(&d).Elem()
-	f := v.FieldByName("cursorPosition")
-
-	// This is a bit hacky but necessary for testing since the field is unexported
-	// and no constructor allows setting it.
-	ptr := unsafe.Pointer(f.UnsafeAddr())
-	*(*int)(ptr) = cursorPosition
-
-	return d
-}
 
 func TestCompleter_resolveTable(t *testing.T) {
 	c := NewCompleter()
@@ -127,7 +107,10 @@ func TestCompleter_Complete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := NewDocument(tt.fullText, len(tt.textBefore))
+			d := Document{
+				Text:           tt.fullText,
+				CursorPosition: len(tt.textBefore),
+			}
 
 			got := c.Complete(d)
 			if len(got) == 0 {
