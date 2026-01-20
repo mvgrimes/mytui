@@ -318,7 +318,12 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 	if err != nil {
 		m.headerViewport.SetContent("")
 		m.headerViewport.Height = 0
-		m.viewport.SetContent(fmt.Sprintf("Error: %v", err))
+		// Wrap error message
+		wrappedError := lipgloss.NewStyle().Width(m.width - 2).Render(fmt.Sprintf("Error: %v", err))
+		m.viewport.SetContent(wrappedError)
+		m.viewport.Height = m.height - 6 - m.headerViewport.Height
+		// Keep focus in query and stay in insert mode
+		return m, nil
 	} else {
 		fullResult := formatter.FormatResult(result, format, m.config)
 		lines := strings.Split(fullResult, "\n")
@@ -332,12 +337,12 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 			m.headerViewport.Height = 0
 			m.viewport.SetContent(fullResult)
 		}
-	}
-	m.viewport.Height = m.height - 6 - m.headerViewport.Height
 
-	m.textarea.Reset()
-	m.focus = FocusResults
-	m.textarea.Blur()
+		m.viewport.Height = m.height - 6 - m.headerViewport.Height
+		m.textarea.Reset()
+		m.focus = FocusResults
+		m.textarea.Blur()
+	}
 
 	return m, nil
 }
