@@ -10,6 +10,7 @@
 tmp/
 .DS_Store
 /docs/ref/
+/trees/
 
 # Editor
 Session.vim
