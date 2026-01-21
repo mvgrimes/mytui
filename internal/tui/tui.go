@@ -15,6 +15,7 @@ import (
 	"github.com/mvgrimes/mycli-go/internal/parser"
 	"github.com/mvgrimes/mycli-go/internal/special"
 	"github.com/mvgrimes/mycli-go/internal/vim"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 var (
@@ -822,11 +823,14 @@ func (m Model) View() string {
 	queryView := m.renderQueryArea()
 
 	var resultsView []string
+	resultsLines := 0
 	for i, r := range m.results {
 		focused := (m.focus == FocusResults && m.focusedResult == i)
 		resultsView = append(resultsView, m.renderResultHeader(r, focused))
+		resultsLines += 1
 		if r.Expanded {
 			resultsView = append(resultsView, r.Viewport.View())
+			resultsLines += r.Viewport.Height
 		}
 	}
 
@@ -839,20 +843,30 @@ func (m Model) View() string {
 	)
 
 	if m.showSuggestions {
-		overlay := m.renderSuggestions()
-		return lipgloss.JoinVertical(lipgloss.Left,
-			lipgloss.JoinVertical(lipgloss.Left, resultsView...),
-			overlay,
-			qHeader,
-			queryView,
-			helpText,
-			statusLine,
-		)
+		// Overlay suggestions near the text cursor, just above and to the right.
+		bg := view
+		fg := m.renderSuggestions()
+		// Compute overlay size
+		_, fgHeight := lipgloss.Size(fg)
+		// Compute where the query area starts in the full view:
+		// resultsLines + 1 line for query header
+		queryTop := resultsLines + 1
+		// Cursor position within textarea
+		curLine := m.textarea.Line()
+		curCol := m.textarea.LineInfo().ColumnOffset
+		// Account for line number gutter "NN | " which is 5 chars
+		gutter := 5
+		// Place top-left corner of overlay just above and to the right of cursor
+		xOff := gutter + curCol + 1
+		yOff := queryTop + curLine - fgHeight
+		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, xOff, yOff)
 	}
 
 	if m.showMenu {
-		overlay := m.renderMenu()
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, overlay)
+		// Center the command menu as a modal over the existing view
+		bg := view
+		fg := m.renderMenu()
+		return overlay.Composite(fg, bg, overlay.Center, overlay.Center, 0, 0)
 	}
 
 	return view
