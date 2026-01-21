@@ -116,12 +116,12 @@ func RenderResult(result *db.Result, writer io.Writer, format Format, cfg *confi
 		default:
 			printTable(result, writer)
 		}
-	}
-
-	if cfg.Timing {
-		fmt.Fprintf(writer, "%s (%.2f sec)\n", result.Status, result.Duration.Seconds())
-	} else {
-		fmt.Fprintf(writer, "%s\n", result.Status)
+	} else if result.Status != "" {
+		if cfg.Timing {
+			fmt.Fprintf(writer, "%s (%.2f sec)\n", result.Status, result.Duration.Seconds())
+		} else {
+			fmt.Fprintf(writer, "%s\n", result.Status)
+		}
 	}
 }
 

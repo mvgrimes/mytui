@@ -18,17 +18,6 @@ import (
 )
 
 var (
-	statusStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color("#3C3C3C")).
-			Padding(0, 1)
-
-	statusFocusStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FFFFFF")).
-				Background(lipgloss.Color("#626262")).
-				Padding(0, 1).
-				Bold(true)
-
 	modeStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#000000")).
 			Background(lipgloss.Color("#00FF00")).
@@ -37,11 +26,11 @@ var (
 
 	headerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#AAAAAA")).
-			Italic(true)
+			Background(lipgloss.Color("#222222"))
 
 	headerFocusStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FFFFFF")).
-				Background(lipgloss.Color("#444444")).
+				Foreground(lipgloss.Color("#0055FF")).
+				Background(lipgloss.Color("#CCCCCC")).
 				Bold(true)
 )
 
@@ -87,16 +76,34 @@ func (m *Model) recalculateHeight() {
 
 	// 1 (qHeader) + queryAreaHeight + 1 (helpText) + 1 (statusLine)
 	overhead := 3 + queryAreaHeight
-	m.viewport.Height = m.height - overhead - m.headerViewport.Height
-	if m.viewport.Height < 0 {
-		m.viewport.Height = 0
+	availableHeight := m.height - overhead
+	if availableHeight < 0 {
+		availableHeight = 0
+	}
+
+	if len(m.results) == 0 {
+		return
+	}
+
+	// Give each result its needed space, up to its DisplaySize
+	for _, r := range m.results {
+		r.Viewport.Width = m.width
+		if r.Expanded {
+			lines := strings.Count(r.Formatted, "\n") + 1
+			height := lines
+			if height > r.DisplaySize {
+				height = r.DisplaySize
+			}
+			r.Viewport.Height = height
+		} else {
+			r.Viewport.Height = 0
+		}
 	}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		tiCmd tea.Cmd
-		vpCmd tea.Cmd
 	)
 
 	switch msg := msg.(type) {
@@ -225,12 +232,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyTab:
 			if m.focus == FocusQuery {
-				m.focus = FocusResults
-				m.textarea.Blur()
+				if len(m.results) > 0 {
+					m.focus = FocusResults
+					m.focusedResult = len(m.results) - 1
+					m.textarea.Blur()
+				}
 				return m, nil
 			} else {
-				m.focus = FocusQuery
-				return m, m.textarea.Focus()
+				if m.focusedResult > 0 {
+					m.focusedResult--
+				} else {
+					m.focus = FocusQuery
+					m.focusedResult = -1
+					return m, m.textarea.Focus()
+				}
+				return m, nil
+			}
+
+		case tea.KeyShiftTab:
+			if m.focus == FocusQuery {
+				if len(m.results) > 0 {
+					m.focus = FocusResults
+					m.focusedResult = 0
+					m.textarea.Blur()
+				}
+				return m, nil
+			} else {
+				if m.focusedResult < len(m.results)-1 {
+					m.focusedResult++
+				} else {
+					m.focus = FocusQuery
+					m.focusedResult = -1
+					return m, m.textarea.Focus()
+				}
+				return m, nil
 			}
 
 		case tea.KeyUp:
@@ -276,27 +311,73 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if m.focus == FocusResults {
+		if m.focus == FocusResults && m.focusedResult >= 0 {
+			res := m.results[m.focusedResult]
 			switch msg.String() {
 			case "q", "esc":
 				m.focus = FocusQuery
+				m.focusedResult = -1
 				return m, m.textarea.Focus()
 			case "j", "down":
-				m.viewport.LineDown(1)
+				res.Viewport.LineDown(1)
 				return m, nil
 			case "k", "up":
-				m.viewport.LineUp(1)
+				res.Viewport.LineUp(1)
 				return m, nil
 			case "h", "left":
-				m.viewport.ScrollLeft(5)
-				m.headerViewport.ScrollLeft(5)
+				res.Viewport.ScrollLeft(5)
 				return m, nil
 			case "l", "right":
-				m.viewport.ScrollRight(5)
-				m.headerViewport.ScrollRight(5)
+				res.Viewport.ScrollRight(5)
 				return m, nil
 			case "G":
-				m.viewport.GotoBottom()
+				res.Viewport.GotoBottom()
+				return m, nil
+			case "e":
+				res.Expanded = true
+				m.recalculateHeight()
+				return m, nil
+			case "c":
+				res.Expanded = false
+				m.recalculateHeight()
+				return m, nil
+			case "+":
+				res.DisplaySize += 2
+				m.recalculateHeight()
+				return m, nil
+			case "-":
+				if res.DisplaySize > 2 {
+					res.DisplaySize -= 2
+				}
+				m.recalculateHeight()
+				return m, nil
+			case "d":
+				m.results = append(m.results[:m.focusedResult], m.results[m.focusedResult+1:]...)
+				if len(m.results) == 0 {
+					m.focus = FocusQuery
+					m.focusedResult = -1
+					return m, m.textarea.Focus()
+				}
+				if m.focusedResult >= len(m.results) {
+					m.focusedResult = len(m.results) - 1
+				}
+				m.recalculateHeight()
+				return m, nil
+			case "r":
+				m.textarea.SetValue(res.Query)
+				m.focus = FocusQuery
+				m.focusedResult = -1
+				return m, m.textarea.Focus()
+			case "R":
+				// Re-run the query and update the current result
+				newResult, err := m.conn.ExecuteQuery(res.Query)
+				if err == nil {
+					res.DbResult = newResult
+					res.Formatted = formatter.FormatResult(newResult, res.Format, m.config)
+					res.Viewport.SetContent(res.Formatted)
+					res.Timestamp = time.Now()
+					res.Duration = newResult.Duration
+				}
 				return m, nil
 			}
 		}
@@ -418,8 +499,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.textarea.SetWidth(msg.Width)
-		m.headerViewport.Width = msg.Width
-		m.viewport.Width = msg.Width
+		for _, r := range m.results {
+			r.Viewport.Width = msg.Width
+		}
 		m.recalculateHeight()
 		return m, nil
 	}
@@ -441,13 +523,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	var resCmds []tea.Cmd
 	_, isKey := msg.(tea.KeyMsg)
-	if !isKey || m.focus == FocusResults {
-		m.headerViewport, _ = m.headerViewport.Update(msg)
-		m.viewport, vpCmd = m.viewport.Update(msg)
+	if !isKey {
+		for _, r := range m.results {
+			var cmd tea.Cmd
+			r.Viewport, cmd = r.Viewport.Update(msg)
+			resCmds = append(resCmds, cmd)
+		}
+	} else if m.focus == FocusResults && m.focusedResult >= 0 && m.focusedResult < len(m.results) {
+		var cmd tea.Cmd
+		m.results[m.focusedResult].Viewport, cmd = m.results[m.focusedResult].Viewport.Update(msg)
+		resCmds = append(resCmds, cmd)
 	}
 
-	return m, tea.Batch(tiCmd, vpCmd)
+	return m, tea.Batch(append(resCmds, tiCmd)...)
 }
 
 func (m Model) refreshCacheCmd() tea.Cmd {
@@ -469,9 +559,7 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 
 	m.specialOutput.Reset()
 	if special.Handle(trimmedQuery, &m) {
-		m.headerViewport.SetContent("")
-		m.headerViewport.Height = 0
-		m.viewport.SetContent(m.specialOutput.String())
+		m.addResultFromText(m.specialOutput.String(), trimmedQuery)
 		m.recalculateHeight()
 		m.textarea.Reset()
 		m.saveToHistory(query)
@@ -494,26 +582,12 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 
 	result, err := m.conn.ExecuteQuery(query)
 	if err != nil {
-		m.headerViewport.SetContent("")
-		m.headerViewport.Height = 0
 		wrappedError := lipgloss.NewStyle().Width(m.width - 2).Render(fmt.Sprintf("Error: %v", err))
-		m.viewport.SetContent(wrappedError)
+		m.addResultFromText(wrappedError, query)
 		m.recalculateHeight()
 		return m, nil
 	} else {
-		fullResult := formatter.FormatResult(result, format, m.config)
-		lines := strings.Split(fullResult, "\n")
-
-		if (format == formatter.FormatTable || format == formatter.FormatUnicode) && len(lines) > 3 {
-			m.headerViewport.SetContent(strings.Join(lines[:3], "\n"))
-			m.headerViewport.Height = 3
-			m.viewport.SetContent(strings.Join(lines[3:], "\n"))
-		} else {
-			m.headerViewport.SetContent("")
-			m.headerViewport.Height = 0
-			m.viewport.SetContent(fullResult)
-		}
-
+		m.addResult(result, query, format)
 		m.recalculateHeight()
 		m.textarea.Reset()
 		m.focus = FocusResults
@@ -639,6 +713,49 @@ func (m Model) renderQueryArea() string {
 	return b.String()
 }
 
+func (m Model) renderResultHeader(r *Result, focused bool) string {
+	cleanQuery := strings.ReplaceAll(r.Query, "\n", " ")
+	cleanQuery = strings.Join(strings.Fields(cleanQuery), " ")
+	// Account for: icon (3), separators (3*3=9), timestamp (8), duration (~7), rows (~12)
+	maxWidth := max(m.width-42, 10)
+	if len(cleanQuery) > maxWidth {
+		cleanQuery = cleanQuery[:maxWidth-3] + "..."
+	}
+
+	icon := " ▶ "
+	if r.Expanded {
+		icon = " ▼ "
+	}
+
+	count := 0
+	if r.DbResult != nil {
+		count = len(r.DbResult.Rows)
+	}
+
+	ts := r.Timestamp.Format("15:04:05")
+	duration := fmt.Sprintf("%.2fs", r.Duration.Seconds())
+	header := fmt.Sprintf("%s %-*s | %s | %s | %d rows", icon, maxWidth, cleanQuery, ts, duration, count)
+
+	style := headerStyle
+	if focused {
+		style = headerFocusStyle
+	}
+
+	return style.Width(m.width).Render(header)
+}
+
+func (m Model) renderQueryHeader(focused bool) string {
+	icon := " 🔍 "
+	header := fmt.Sprintf("%s QUERY", icon)
+
+	style := headerStyle
+	if focused {
+		style = headerFocusStyle
+	}
+
+	return style.Width(m.width).Render(header)
+}
+
 func (m Model) View() string {
 	m.UpdateCursorStyle()
 
@@ -679,11 +796,9 @@ func (m Model) View() string {
 		mode = " NORMAL "
 	}
 
-	renderedStatus := statusStr // background will be handled by statusLineStyle
+	renderedStatus := statusStr
 	renderedMode := modeStyle.Render(mode)
 
-	// Calculate filler to push mode to the right
-	// We need to account for the width of the status string (with its styles) and mode
 	fillerWidth := m.width - lipgloss.Width(renderedStatus) - lipgloss.Width(renderedMode)
 	if fillerWidth < 0 {
 		fillerWidth = 0
@@ -695,21 +810,24 @@ func (m Model) View() string {
 		renderedMode,
 	))
 
-	queryHeaderStr := " [QUERY] "
-	if m.focus == FocusResults {
-		queryHeaderStr = " [RESULT] "
-	}
-
-	qHeader := headerFocusStyle.Render(queryHeaderStr)
+	qHeader := m.renderQueryHeader(m.focus == FocusQuery)
 
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Margin(0, 1)
-	helpText := helpStyle.Render("Ctrl+K: autocomplete • Ctrl+Space: menu • Ctrl+P/N: history • Tab: switch focus")
+	helpText := helpStyle.Render("e:expand c:collapse +/-:size d:delete r:rerun R:refresh • Tab: focus")
 
 	queryView := m.renderQueryArea()
 
+	var resultsView []string
+	for i, r := range m.results {
+		focused := (m.focus == FocusResults && m.focusedResult == i)
+		resultsView = append(resultsView, m.renderResultHeader(r, focused))
+		if r.Expanded {
+			resultsView = append(resultsView, r.Viewport.View())
+		}
+	}
+
 	view := lipgloss.JoinVertical(lipgloss.Left,
-		m.headerViewport.View(),
-		m.viewport.View(),
+		lipgloss.JoinVertical(lipgloss.Left, resultsView...),
 		qHeader,
 		queryView,
 		helpText,
@@ -718,33 +836,9 @@ func (m Model) View() string {
 
 	if m.showSuggestions {
 		overlay := m.renderSuggestions()
-		h_s := lipgloss.Height(overlay)
-
-		// Create a temporary shrunken viewport
-		origHeight := m.viewport.Height
-		m.viewport.Height -= h_s
-		if m.viewport.Height < 0 {
-			m.viewport.Height = 0
-		}
-		shrunkenViewport := m.viewport.View()
-		m.viewport.Height = origHeight
-
-		// Align overlay with cursor column
-		curColIdx := m.textarea.LineInfo().ColumnOffset
-		leftMargin := 5 + curColIdx
-		w_s := lipgloss.Width(overlay)
-		if leftMargin+w_s > m.width {
-			leftMargin = m.width - w_s
-		}
-		if leftMargin < 0 {
-			leftMargin = 0
-		}
-		alignedOverlay := lipgloss.NewStyle().PaddingLeft(leftMargin).Render(overlay)
-
 		return lipgloss.JoinVertical(lipgloss.Left,
-			m.headerViewport.View(),
-			shrunkenViewport,
-			alignedOverlay,
+			lipgloss.JoinVertical(lipgloss.Left, resultsView...),
+			overlay,
 			qHeader,
 			queryView,
 			statusLine,

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/cursor"
@@ -31,6 +32,18 @@ const (
 	FocusResults
 )
 
+type Result struct {
+	Query       string
+	Timestamp   time.Time
+	DisplaySize int
+	Expanded    bool
+	DbResult    *db.Result
+	Duration    time.Duration
+	Formatted   string
+	Viewport    viewport.Model
+	Format      formatter.Format
+}
+
 type MenuType int
 
 const (
@@ -40,20 +53,20 @@ const (
 )
 
 type Model struct {
-	textarea       textarea.Model
-	viewport       viewport.Model
-	headerViewport viewport.Model
-	conn           *db.Connection
-	config         *config.Config
-	completer      *completion.Completer
-	vimState       *vim.VimState
-	focus          Focus
-	history        []string
-	historyIndex   int
-	vimPendingKey  string
-	err            error
-	width          int
-	height         int
+	textarea      textarea.Model
+	results       []*Result
+	focusedResult int
+	conn          *db.Connection
+	config        *config.Config
+	completer     *completion.Completer
+	vimState      *vim.VimState
+	focus         Focus
+	history       []string
+	historyIndex  int
+	vimPendingKey string
+	err           error
+	width         int
+	height        int
 
 	currentFormat formatter.Format
 	onceFormat    formatter.Format
@@ -136,10 +149,7 @@ func (m *Model) GetCommands() []MenuCommand {
 				Action: func(m *Model) tea.Cmd {
 					m.specialOutput.Reset()
 					special.Handle("\\s", m)
-					m.headerViewport.SetContent("")
-					m.headerViewport.Height = 0
-					m.viewport.SetContent(m.specialOutput.String())
-					m.recalculateHeight()
+					m.addResultFromText(m.specialOutput.String(), "\\s")
 					m.focus = FocusResults
 					m.textarea.Blur()
 					return nil
@@ -212,10 +222,7 @@ func (m *Model) copyToClipboard(format formatter.Format) {
 
 	m.specialOutput.Reset()
 	fmt.Fprintf(&m.specialOutput, "Result copied to clipboard as %s.\n", format)
-	m.headerViewport.SetContent("")
-	m.headerViewport.Height = 0
-	m.viewport.SetContent(m.specialOutput.String())
-	m.recalculateHeight()
+	m.addResultFromText(m.specialOutput.String(), "Copy to Clipboard")
 	m.focus = FocusResults
 	m.textarea.Blur()
 }
@@ -240,10 +247,7 @@ func (m *Model) SaveFavorite(name string) {
 
 	m.specialOutput.Reset()
 	fmt.Fprintf(&m.specialOutput, "Saved favorite query '%s'\n", name)
-	m.headerViewport.SetContent("")
-	m.headerViewport.Height = 0
-	m.viewport.SetContent(m.specialOutput.String())
-	m.recalculateHeight()
+	m.addResultFromText(m.specialOutput.String(), "Save Favorite")
 	m.focus = FocusResults
 	m.textarea.Blur()
 }
@@ -258,25 +262,20 @@ func NewModel(conn *db.Connection, cfg *config.Config) Model {
 	ta.Prompt = ""
 	ta.ShowLineNumbers = false
 
-	vp := viewport.New(80, 20)
-	vp.SetContent("Welcome to mycli-go!")
-
-	hvp := viewport.New(80, 3)
-
 	history, _ := loadHistory(cfg.HistoryFile)
 
 	m := Model{
-		textarea:       ta,
-		viewport:       vp,
-		headerViewport: hvp,
-		conn:           conn,
-		config:         cfg,
-		completer:      completion.NewCompleter(),
-		vimState:       vim.NewVimState(),
-		focus:          FocusQuery,
-		history:        history,
-		historyIndex:   len(history),
-		currentFormat:  formatter.Format(cfg.TableFormat),
+		textarea:      ta,
+		results:       []*Result{},
+		focusedResult: -1,
+		conn:          conn,
+		config:        cfg,
+		completer:     completion.NewCompleter(),
+		vimState:      vim.NewVimState(),
+		focus:         FocusQuery,
+		history:       history,
+		historyIndex:  len(history),
+		currentFormat: formatter.Format(cfg.TableFormat),
 	}
 	m.UpdateCursorStyle()
 	return m
@@ -291,6 +290,46 @@ func (m *Model) SetLastQuery(q string)               { m.lastQuery = q }
 func (m *Model) SetOnceFormat(f formatter.Format)    { m.onceFormat = f }
 func (m *Model) SetPagerOverride(p string)           { m.pagerOverride = p }
 func (m *Model) GetWriter() io.Writer                { return &m.specialOutput }
+
+func (m *Model) addResult(result *db.Result, query string, format formatter.Format) {
+	fullResult := formatter.FormatResult(result, format, m.config)
+	r := &Result{
+		Query:       query,
+		Timestamp:   time.Now(),
+		Duration:    result.Duration,
+		DisplaySize: 10,
+		Expanded:    true,
+		DbResult:    result,
+		Formatted:   fullResult,
+		Viewport:    viewport.New(m.width, 10),
+		Format:      format,
+	}
+	r.Viewport.SetContent(fullResult)
+	m.results = append(m.results, r)
+	m.focusedResult = len(m.results) - 1
+	if len(m.results) > m.config.MaxResults {
+		m.results = m.results[1:]
+		m.focusedResult--
+	}
+}
+
+func (m *Model) addResultFromText(text string, query string) {
+	r := &Result{
+		Query:       query,
+		Timestamp:   time.Now(),
+		DisplaySize: 10,
+		Expanded:    true,
+		Formatted:   text,
+		Viewport:    viewport.New(m.width, 10),
+	}
+	r.Viewport.SetContent(text)
+	m.results = append(m.results, r)
+	m.focusedResult = len(m.results) - 1
+	if len(m.results) > m.config.MaxResults {
+		m.results = m.results[1:]
+		m.focusedResult--
+	}
+}
 
 func (m *Model) ExecuteQueryWithFormat(query string, format formatter.Format) {
 	m.lastQuery = query
