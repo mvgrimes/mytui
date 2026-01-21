@@ -35,6 +35,11 @@ func NewConnection(config Config) (*Connection, error) {
 		return nil, err
 	}
 
+	// Use a single persistent connection so session state (e.g., USE schema)
+	// applies consistently to subsequent queries.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
