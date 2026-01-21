@@ -813,7 +813,11 @@ func (m Model) View() string {
 	qHeader := m.renderQueryHeader(m.focus == FocusQuery)
 
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Margin(0, 1)
-	helpText := helpStyle.Render("e:expand c:collapse +/-:size d:delete r:rerun R:refresh • Tab: focus")
+	helpTextStr := "e:expand c:collapse +/-:size d:delete r:rerun R:refresh • Tab: focus"
+	if m.focus == FocusQuery {
+		helpTextStr = "Ctrl+K: autocomplete • Ctrl+Space: menu • Ctrl+P/N: history • Tab: focus"
+	}
+	helpText := helpStyle.Render(helpTextStr)
 
 	queryView := m.renderQueryArea()
 
@@ -841,6 +845,7 @@ func (m Model) View() string {
 			overlay,
 			qHeader,
 			queryView,
+			helpText,
 			statusLine,
 		)
 	}
