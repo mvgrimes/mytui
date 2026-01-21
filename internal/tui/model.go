@@ -21,6 +21,7 @@ import (
 	"github.com/mvgrimes/mycli-go/internal/parser"
 	"github.com/mvgrimes/mycli-go/internal/special"
 	"github.com/mvgrimes/mycli-go/internal/vim"
+	"github.com/spf13/viper"
 )
 
 type Focus int
@@ -28,6 +29,14 @@ type Focus int
 const (
 	FocusQuery Focus = iota
 	FocusResults
+)
+
+type MenuType int
+
+const (
+	MenuMain MenuType = iota
+	MenuSaveFavorite
+	MenuRunFavorite
 )
 
 type Model struct {
@@ -54,6 +63,10 @@ type Model struct {
 
 	showMenu  bool
 	menuIndex int
+	menuType  MenuType
+
+	favoriteNames []string
+	favoriteInput string
 
 	showSuggestions bool
 	suggestions     []completion.Suggestion
@@ -68,63 +81,171 @@ type MenuCommand struct {
 }
 
 func (m *Model) GetCommands() []MenuCommand {
-	return []MenuCommand{
-		{
-			Label: "Status (\\s)",
-			Action: func(m *Model) tea.Cmd {
-				m.specialOutput.Reset()
-				special.Handle("\\s", m)
-				m.headerViewport.SetContent("")
-				m.headerViewport.Height = 0
-				m.viewport.SetContent(m.specialOutput.String())
-				m.viewport.Height = m.height - 6 - m.headerViewport.Height
-				m.focus = FocusResults
-				m.textarea.Blur()
-				return nil
-			},
-		},
-		{
-			Label: "Copy last output to clipboard",
-			Action: func(m *Model) tea.Cmd {
-				m.specialOutput.Reset()
-				special.Handle("\\clip", m)
-				m.viewport.SetContent(m.specialOutput.String())
-				m.viewport.Height = m.height - 6 - m.headerViewport.Height
-				m.focus = FocusResults
-				m.textarea.Blur()
-				return nil
-			},
-		},
-		{
-			Label: "Copy output as CSV",
-			Action: func(m *Model) tea.Cmd {
-				if m.lastQuery == "" {
+	switch m.menuType {
+	case MenuSaveFavorite:
+		return []MenuCommand{
+			{
+				Label: "Confirm Save (Prompt for name in Update)",
+				Action: func(m *Model) tea.Cmd {
 					return nil
+				},
+			},
+		}
+	case MenuRunFavorite:
+		var cmds []MenuCommand
+		m.favoriteNames = nil
+		for name := range m.config.FavoriteQueries {
+			m.favoriteNames = append(m.favoriteNames, name)
+		}
+		// Sort names for consistency
+		for i := 0; i < len(m.favoriteNames); i++ {
+			for j := i + 1; j < len(m.favoriteNames); j++ {
+				if m.favoriteNames[i] > m.favoriteNames[j] {
+					m.favoriteNames[i], m.favoriteNames[j] = m.favoriteNames[j], m.favoriteNames[i]
 				}
-				result, err := m.conn.ExecuteQuery(m.lastQuery)
-				if err != nil {
+			}
+		}
+		for _, name := range m.favoriteNames {
+			n := name
+			cmds = append(cmds, MenuCommand{
+				Label: n,
+				Action: func(m *Model) tea.Cmd {
+					query := m.config.FavoriteQueries[n]
+					query = strings.ReplaceAll(query, "\\n", "\n")
+					m.textarea.SetValue(query)
+					m.showMenu = false
 					return nil
-				}
-				var buf bytes.Buffer
-				// Use RenderResult with FormatCSV
-				formatter.RenderResult(result, &buf, formatter.FormatCSV, m.config)
-				clipboard.WriteAll(buf.String())
-				m.specialOutput.Reset()
-				fmt.Fprintln(&m.specialOutput, "Last result copied to clipboard as CSV.")
-				m.viewport.SetContent(m.specialOutput.String())
-				m.viewport.Height = m.height - 6 - m.headerViewport.Height
-				m.focus = FocusResults
-				m.textarea.Blur()
-				return nil
+				},
+			})
+		}
+		if len(cmds) == 0 {
+			cmds = append(cmds, MenuCommand{
+				Label: "No favorites saved",
+				Action: func(m *Model) tea.Cmd {
+					m.showMenu = false
+					return nil
+				},
+			})
+		}
+		return cmds
+
+	default:
+		return []MenuCommand{
+			{
+				Label: "Status (\\s)",
+				Action: func(m *Model) tea.Cmd {
+					m.specialOutput.Reset()
+					special.Handle("\\s", m)
+					m.headerViewport.SetContent("")
+					m.headerViewport.Height = 0
+					m.viewport.SetContent(m.specialOutput.String())
+					m.recalculateHeight()
+					m.focus = FocusResults
+					m.textarea.Blur()
+					return nil
+				},
 			},
-		},
-		{
-			Label: "Exit",
-			Action: func(m *Model) tea.Cmd {
-				return tea.Quit
+			{
+				Label: "Copy clipboard (unicode)",
+				Action: func(m *Model) tea.Cmd {
+					m.copyToClipboard(m.currentFormat)
+					return nil
+				},
 			},
-		},
+			{
+				Label: "Copy to clipboard (ascii)",
+				Action: func(m *Model) tea.Cmd {
+					m.copyToClipboard(formatter.FormatTable)
+					return nil
+				},
+			},
+			{
+				Label: "Copy clipboard (CSV)",
+				Action: func(m *Model) tea.Cmd {
+					m.copyToClipboard(formatter.FormatCSV)
+					return nil
+				},
+			},
+			{
+				Label: "Save query as favorite",
+				Action: func(m *Model) tea.Cmd {
+					m.menuType = MenuSaveFavorite
+					m.menuIndex = 0
+					return nil
+				},
+			},
+			{
+				Label: "Run query as favorite",
+				Action: func(m *Model) tea.Cmd {
+					m.menuType = MenuRunFavorite
+					m.menuIndex = 0
+					return nil
+				},
+			},
+			{
+				Label: "Exit",
+				Action: func(m *Model) tea.Cmd {
+					return tea.Quit
+				},
+			},
+		}
 	}
+}
+
+func (m *Model) copyToClipboard(format formatter.Format) {
+	query := m.lastQuery
+	if query == "" {
+		query = m.textarea.Value()
+	}
+	if query == "" {
+		return
+	}
+
+	result, err := m.conn.ExecuteQuery(query)
+	if err != nil {
+		return
+	}
+
+	var buf bytes.Buffer
+	formatter.RenderResult(result, &buf, format, m.config)
+	clipboard.WriteAll(buf.String())
+
+	m.specialOutput.Reset()
+	fmt.Fprintf(&m.specialOutput, "Result copied to clipboard as %s.\n", format)
+	m.headerViewport.SetContent("")
+	m.headerViewport.Height = 0
+	m.viewport.SetContent(m.specialOutput.String())
+	m.recalculateHeight()
+	m.focus = FocusResults
+	m.textarea.Blur()
+}
+
+func (m *Model) SaveFavorite(name string) {
+	query := m.textarea.Value()
+	if query == "" {
+		query = m.lastQuery
+	}
+	if query == "" || name == "" {
+		return
+	}
+
+	if m.config.FavoriteQueries == nil {
+		m.config.FavoriteQueries = make(map[string]string)
+	}
+	safeQuery := strings.ReplaceAll(query, "\n", "\\n")
+	m.config.FavoriteQueries[name] = safeQuery
+
+	viper.Set("favorite_queries", m.config.FavoriteQueries)
+	viper.WriteConfig()
+
+	m.specialOutput.Reset()
+	fmt.Fprintf(&m.specialOutput, "Saved favorite query '%s'\n", name)
+	m.headerViewport.SetContent("")
+	m.headerViewport.Height = 0
+	m.viewport.SetContent(m.specialOutput.String())
+	m.recalculateHeight()
+	m.focus = FocusResults
+	m.textarea.Blur()
 }
 
 func NewModel(conn *db.Connection, cfg *config.Config) Model {

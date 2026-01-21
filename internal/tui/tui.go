@@ -106,20 +106,59 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.showMenu {
+			if m.menuType == MenuSaveFavorite {
+				switch msg.Type {
+				case tea.KeyEnter:
+					m.SaveFavorite(m.favoriteInput)
+					m.showMenu = false
+					m.favoriteInput = ""
+					return m, nil
+				case tea.KeyEsc:
+					m.showMenu = false
+					m.favoriteInput = ""
+					return m, nil
+				case tea.KeyBackspace:
+					if len(m.favoriteInput) > 0 {
+						m.favoriteInput = m.favoriteInput[:len(m.favoriteInput)-1]
+					}
+					return m, nil
+				case tea.KeyRunes:
+					m.favoriteInput += string(msg.Runes)
+					return m, nil
+				}
+				// Also handle Ctrl+Space/At to close
+				if msg.String() == "ctrl+ " || msg.String() == "ctrl+space" || msg.Type == tea.KeyCtrlAt {
+					m.showMenu = false
+					m.favoriteInput = ""
+					return m, nil
+				}
+				return m, nil
+			}
+
 			switch msg.String() {
 			case "up", "k":
 				if m.menuIndex > 0 {
 					m.menuIndex--
+				} else {
+					m.menuIndex = len(m.GetCommands()) - 1
 				}
 			case "down", "j":
 				if m.menuIndex < len(m.GetCommands())-1 {
 					m.menuIndex++
+				} else {
+					m.menuIndex = 0
 				}
 			case "enter":
+				oldType := m.menuType
 				cmd := m.GetCommands()[m.menuIndex].Action(&m)
-				m.showMenu = false
+				if m.menuType == oldType {
+					m.showMenu = false
+				}
 				return m, cmd
 			case "esc", "ctrl+ ", "ctrl+space":
+				m.showMenu = false
+			}
+			if msg.Type == tea.KeyCtrlAt {
 				m.showMenu = false
 			}
 			return m, nil
@@ -160,6 +199,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.historyIndex--
 					m.textarea.SetValue(m.history[m.historyIndex])
 					m.textarea.CursorEnd()
+					m.recalculateHeight()
 				}
 				return m, nil
 			}
@@ -169,9 +209,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.historyIndex++
 					m.textarea.SetValue(m.history[m.historyIndex])
 					m.textarea.CursorEnd()
+					m.recalculateHeight()
 				} else if m.historyIndex == len(m.history)-1 {
 					m.historyIndex++
 					m.textarea.Reset()
+					m.recalculateHeight()
 				}
 				return m, nil
 			}
@@ -201,6 +243,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.historyIndex--
 					m.textarea.SetValue(m.history[m.historyIndex])
 					m.textarea.CursorEnd()
+					m.recalculateHeight()
 				}
 				return m, nil
 			}
@@ -215,9 +258,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.historyIndex++
 					m.textarea.SetValue(m.history[m.historyIndex])
 					m.textarea.CursorEnd()
+					m.recalculateHeight()
 				} else if m.historyIndex == len(m.history)-1 {
 					m.historyIndex++
 					m.textarea.Reset()
+					m.recalculateHeight()
 				}
 				return m, nil
 			}
@@ -226,6 +271,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Type == tea.KeyCtrlAt || (msg.Type == tea.KeySpace && msg.Alt) || msg.String() == "ctrl+ " || msg.String() == "ctrl+space" {
 				m.showMenu = true
 				m.menuIndex = 0
+				m.menuType = MenuMain
 				return m, nil
 			}
 		}
@@ -357,6 +403,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if msg.Type == tea.KeyEnter || msg.Type == tea.KeyCtrlJ {
 					if msg.Alt || msg.Type == tea.KeyCtrlJ {
 						m.textarea, tiCmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
+						m.recalculateHeight()
 						return m, tiCmd
 					}
 					query := m.textarea.Value()
@@ -388,9 +435,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		oldVal := m.textarea.Value()
 		if _, ok := msg.(tea.KeyMsg); !ok {
 			m.textarea, tiCmd = m.textarea.Update(msg)
-		} else {
-			// Some key msgs in normal mode still change content (e.g. 'x', 'dd' implemented via Update calls)
-			// But my current implementation of normal mode handles most keys manually.
 		}
 		if m.textarea.Value() != oldVal {
 			m.recalculateHeight()
@@ -769,20 +813,41 @@ func (m Model) renderMenu() string {
 		Bold(true)
 
 	var b strings.Builder
+
+	title := " COMMANDS "
+	switch m.menuType {
+	case MenuSaveFavorite:
+		title = " SAVE FAVORITE "
+	case MenuRunFavorite:
+		title = " RUN FAVORITE "
+	}
+
 	b.WriteString(lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#00AAFF")).
 		Padding(0, 1).
-		Render(" COMMANDS "))
+		Render(title))
 	b.WriteString("\n\n")
 
-	commands := m.GetCommands()
-	for i, cmd := range commands {
-		line := cmd.Label
-		if i == m.menuIndex {
-			b.WriteString(activeStyle.Render(line) + "\n")
-		} else {
-			b.WriteString(style.Render(line) + "\n")
+	if m.menuType == MenuSaveFavorite {
+		b.WriteString("Enter name for favorite:\n")
+		b.WriteString(lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFFFFF")).
+			Background(lipgloss.Color("#333333")).
+			Padding(0, 1).
+			Width(30).
+			Render(m.favoriteInput + "_"))
+		b.WriteString("\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("Enter: Save • Esc: Cancel"))
+	} else {
+		commands := m.GetCommands()
+		for i, cmd := range commands {
+			line := cmd.Label
+			if i == m.menuIndex {
+				b.WriteString(activeStyle.Render(line) + "\n")
+			} else {
+				b.WriteString(style.Render(line) + "\n")
+			}
 		}
 	}
 
