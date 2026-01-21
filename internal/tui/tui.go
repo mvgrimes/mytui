@@ -103,10 +103,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.SaveFavorite(m.favoriteInput)
 					m.showMenu = false
 					m.favoriteInput = ""
+					m.menuFilter = ""
 					return m, nil
 				case tea.KeyEsc:
 					m.showMenu = false
 					m.favoriteInput = ""
+					m.menuFilter = ""
 					return m, nil
 				case tea.KeyBackspace:
 					if len(m.favoriteInput) > 0 {
@@ -121,36 +123,69 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if msg.String() == "ctrl+ " || msg.String() == "ctrl+space" || msg.Type == tea.KeyCtrlAt {
 					m.showMenu = false
 					m.favoriteInput = ""
+					m.menuFilter = ""
 					return m, nil
 				}
 				return m, nil
 			}
 
+			// Filterable menus (MenuMain, MenuRunFavorite)
 			switch msg.String() {
 			case "up", "k":
-				if m.menuIndex > 0 {
-					m.menuIndex--
-				} else {
-					m.menuIndex = len(m.GetCommands()) - 1
+				cmds := m.filteredMenuCommands()
+				if len(cmds) > 0 {
+					if m.menuIndex > 0 {
+						m.menuIndex--
+					} else {
+						m.menuIndex = len(cmds) - 1
+					}
 				}
 			case "down", "j":
-				if m.menuIndex < len(m.GetCommands())-1 {
-					m.menuIndex++
-				} else {
-					m.menuIndex = 0
+				cmds := m.filteredMenuCommands()
+				if len(cmds) > 0 {
+					if m.menuIndex < len(cmds)-1 {
+						m.menuIndex++
+					} else {
+						m.menuIndex = 0
+					}
 				}
 			case "enter":
 				oldType := m.menuType
-				cmd := m.GetCommands()[m.menuIndex].Action(&m)
+				cmds := m.filteredMenuCommands()
+				if len(cmds) == 0 {
+					return m, nil
+				}
+				if m.menuIndex < 0 || m.menuIndex >= len(cmds) {
+					m.menuIndex = 0
+				}
+				cmd := cmds[m.menuIndex].Action(&m)
 				if m.menuType == oldType {
 					m.showMenu = false
+					m.menuFilter = ""
 				}
 				return m, cmd
 			case "esc", "ctrl+ ", "ctrl+space":
 				m.showMenu = false
+				m.menuFilter = ""
+				return m, nil
 			}
 			if msg.Type == tea.KeyCtrlAt {
 				m.showMenu = false
+				m.menuFilter = ""
+				return m, nil
+			}
+			// Live filtering input
+			if msg.Type == tea.KeyBackspace {
+				if len(m.menuFilter) > 0 {
+					m.menuFilter = m.menuFilter[:len(m.menuFilter)-1]
+				}
+				m.menuIndex = 0
+				return m, nil
+			}
+			if msg.Type == tea.KeyRunes {
+				m.menuFilter += string(msg.Runes)
+				m.menuIndex = 0
+				return m, nil
 			}
 			return m, nil
 		}
@@ -291,6 +326,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.showMenu = true
 				m.menuIndex = 0
 				m.menuType = MenuMain
+				m.menuFilter = ""
 				return m, nil
 			}
 		}

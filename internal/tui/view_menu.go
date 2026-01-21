@@ -6,6 +6,22 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// filteredMenuCommands returns the command list filtered by the current menuFilter.
+func (m *Model) filteredMenuCommands() []MenuCommand {
+	cmds := m.GetCommands()
+	if m.menuFilter == "" {
+		return cmds
+	}
+	q := strings.ToLower(m.menuFilter)
+	out := make([]MenuCommand, 0, len(cmds))
+	for _, c := range cmds {
+		if strings.Contains(strings.ToLower(c.Label), q) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func (m Model) renderMenu() string {
 	style := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#FFFFFF")).
@@ -45,7 +61,17 @@ func (m Model) renderMenu() string {
 		b.WriteString("\n\n")
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("Enter: Save • Esc: Cancel"))
 	} else {
-		commands := m.GetCommands()
+		// Filter input line
+		b.WriteString("Filter: ")
+		b.WriteString(lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFFFFF")).
+			Background(lipgloss.Color("#333333")).
+			Padding(0, 1).
+			Width(30).
+			Render(m.menuFilter + "_"))
+		b.WriteString("\n\n")
+
+		commands := m.filteredMenuCommands()
 		for i, cmd := range commands {
 			line := cmd.Label
 			if i == m.menuIndex {
@@ -53,6 +79,9 @@ func (m Model) renderMenu() string {
 			} else {
 				b.WriteString(style.Render(line) + "\n")
 			}
+		}
+		if len(commands) == 0 {
+			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("No matches") + "\n")
 		}
 	}
 

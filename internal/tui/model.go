@@ -74,9 +74,10 @@ type Model struct {
 	lastQuery     string
 	specialOutput bytes.Buffer
 
-	showMenu  bool
-	menuIndex int
-	menuType  MenuType
+	showMenu   bool
+	menuIndex  int
+	menuType   MenuType
+	menuFilter string
 
 	favoriteNames []string
 	favoriteInput string
