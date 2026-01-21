@@ -6,8 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alecthomas/chroma/v2"
-	"github.com/alecthomas/chroma/v2/lexers"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mvgrimes/mycli-go/internal/completion"
@@ -18,22 +16,7 @@ import (
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
-var (
-	modeStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#000000")).
-			Background(lipgloss.Color("#00FF00")).
-			Padding(0, 1).
-			Bold(true)
-
-	headerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#AAAAAA")).
-			Background(lipgloss.Color("#222222"))
-
-	headerFocusStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#0055FF")).
-				Background(lipgloss.Color("#CCCCCC")).
-				Bold(true)
-)
+// Styles moved to styles.go
 
 func (m Model) Init() tea.Cmd {
 	return m.refreshCacheCmd()
@@ -606,156 +589,7 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) renderHighlightedText(text string) string {
-	lexer := lexers.Get("sql")
-	if lexer == nil {
-		lexer = lexers.Fallback
-	}
-	iterator, err := lexer.Tokenise(nil, text)
-	if err != nil {
-		return text
-	}
-
-	var b strings.Builder
-	for _, tok := range iterator.Tokens() {
-		style := m.getStyleForToken(tok.Type)
-		b.WriteString(style.Render(tok.Value))
-	}
-	return b.String()
-}
-
-func (m Model) getStyleForToken(t chroma.TokenType) lipgloss.Style {
-	s := lipgloss.NewStyle()
-	switch t {
-	case chroma.Keyword, chroma.KeywordReserved, chroma.KeywordType:
-		return s.Foreground(lipgloss.Color("#00AAFF")).Bold(true)
-	case chroma.String, chroma.StringSingle, chroma.StringDouble:
-		return s.Foreground(lipgloss.Color("#00FF88"))
-	case chroma.Number, chroma.NumberInteger, chroma.NumberFloat:
-		return s.Foreground(lipgloss.Color("#FF8800"))
-	case chroma.Comment, chroma.CommentSingle, chroma.CommentMultiline:
-		return s.Foreground(lipgloss.Color("#666666")).Italic(true)
-	case chroma.NameLabel, chroma.NameVariable:
-		return s.Foreground(lipgloss.Color("#CC88FF"))
-	case chroma.Operator, chroma.Punctuation:
-		return s.Foreground(lipgloss.Color("#AAAAAA"))
-	default:
-		return s.Foreground(lipgloss.Color("#FFFFFF"))
-	}
-}
-
-func (m Model) renderQueryArea() string {
-	val := m.textarea.Value()
-	isPlaceholder := false
-	if val == "" {
-		val = m.textarea.Placeholder
-		isPlaceholder = true
-	}
-
-	lines := strings.Split(val, "\n")
-	curLineIdx := m.textarea.Line()
-	curColIdx := m.textarea.LineInfo().ColumnOffset
-
-	var b strings.Builder
-	for i, line := range lines {
-		displayLine := ""
-		if isPlaceholder {
-			placeholderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
-			if i == 0 && m.textarea.Focused() {
-				// Show cursor at start of placeholder
-				cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF")).Foreground(lipgloss.Color("#000000"))
-				if m.vimState.Mode == vim.NormalMode {
-					cursorStyle = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC")).Foreground(lipgloss.Color("#000000"))
-				}
-				runes := []rune(line)
-				if len(runes) > 0 {
-					displayLine = cursorStyle.Render(string(runes[0])) + placeholderStyle.Render(string(runes[1:]))
-				} else {
-					displayLine = cursorStyle.Render(" ")
-				}
-			} else {
-				displayLine = placeholderStyle.Render(line)
-			}
-		} else if i == curLineIdx && m.textarea.Focused() {
-			runes := []rune(line)
-			before := ""
-			cursorChar := " "
-			after := ""
-
-			if curColIdx < len(runes) {
-				before = string(runes[:curColIdx])
-				cursorChar = string(runes[curColIdx])
-				after = string(runes[curColIdx+1:])
-			} else {
-				before = line
-			}
-
-			hBefore := m.renderHighlightedText(before)
-			hAfter := m.renderHighlightedText(after)
-
-			cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF")).Foreground(lipgloss.Color("#000000"))
-			if m.vimState.Mode == vim.NormalMode {
-				cursorStyle = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC")).Foreground(lipgloss.Color("#000000"))
-			}
-
-			displayLine = hBefore + cursorStyle.Render(cursorChar) + hAfter
-		} else {
-			displayLine = m.renderHighlightedText(line)
-		}
-
-		b.WriteString(fmt.Sprintf("%2d | %s\n", i+1, displayLine))
-	}
-
-	if m.lastError != nil && !isPlaceholder {
-		padding := m.lastError.Col + 5
-		b.WriteString(strings.Repeat(" ", padding) + lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render("^ "+m.lastError.Message) + "\n")
-	}
-
-	return b.String()
-}
-
-func (m Model) renderResultHeader(r *Result, focused bool) string {
-	cleanQuery := strings.ReplaceAll(r.Query, "\n", " ")
-	cleanQuery = strings.Join(strings.Fields(cleanQuery), " ")
-	// Account for: icon (3), separators (3*3=9), timestamp (8), duration (~7), rows (~12)
-	maxWidth := max(m.width-42, 10)
-	if len(cleanQuery) > maxWidth {
-		cleanQuery = cleanQuery[:maxWidth-3] + "..."
-	}
-
-	icon := " ▶ "
-	if r.Expanded {
-		icon = " ▼ "
-	}
-
-	count := 0
-	if r.DbResult != nil {
-		count = len(r.DbResult.Rows)
-	}
-
-	ts := r.Timestamp.Format("15:04:05")
-	duration := fmt.Sprintf("%.2fs", r.Duration.Seconds())
-	header := fmt.Sprintf("%s %-*s | %s | %s | %d rows", icon, maxWidth, cleanQuery, ts, duration, count)
-
-	style := headerStyle
-	if focused {
-		style = headerFocusStyle
-	}
-
-	return style.Width(m.width).Render(header)
-}
-
-func (m Model) renderQueryHeader(focused bool) string {
-	icon := " 🔍 "
-	header := fmt.Sprintf("%s QUERY", icon)
-
-	style := headerStyle
-	if focused {
-		style = headerFocusStyle
-	}
-
-	return style.Width(m.width).Render(header)
-}
+// View helpers moved into separate files for clarity
 
 func (m Model) View() string {
 	m.UpdateCursorStyle()
@@ -846,19 +680,8 @@ func (m Model) View() string {
 		// Overlay suggestions near the text cursor, just above and to the right.
 		bg := view
 		fg := m.renderSuggestions()
-		// Compute overlay size
 		_, fgHeight := lipgloss.Size(fg)
-		// Compute where the query area starts in the full view:
-		// resultsLines + 1 line for query header
-		queryTop := resultsLines + 1
-		// Cursor position within textarea
-		curLine := m.textarea.Line()
-		curCol := m.textarea.LineInfo().ColumnOffset
-		// Account for line number gutter "NN | " which is 5 chars
-		gutter := 5
-		// Place top-left corner of overlay just above and to the right of cursor
-		xOff := gutter + curCol + 1
-		yOff := queryTop + curLine - fgHeight
+		xOff, yOff := m.computeSuggestionOffsets(resultsLines, fgHeight)
 		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, xOff, yOff)
 	}
 
@@ -870,104 +693,4 @@ func (m Model) View() string {
 	}
 
 	return view
-}
-
-func (m Model) renderSuggestions() string {
-	if len(m.suggestions) == 0 {
-		return ""
-	}
-
-	style := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFFFF")).
-		Background(lipgloss.Color("#1A1A1A")).
-		Padding(0, 1)
-
-	activeStyle := style.Copy().
-		Foreground(lipgloss.Color("#000000")).
-		Background(lipgloss.Color("#00AAFF")).
-		Bold(true)
-
-	var b strings.Builder
-	start := 0
-	if m.suggestionIndex > 5 {
-		start = m.suggestionIndex - 5
-	}
-
-	for i := start; i < len(m.suggestions) && i < start+10; i++ {
-		s := m.suggestions[i]
-		line := fmt.Sprintf("%-20s %s", s.Text, s.Description)
-		if i == m.suggestionIndex {
-			b.WriteString(activeStyle.Render(line) + "\n")
-		} else {
-			b.WriteString(style.Render(line) + "\n")
-		}
-	}
-	if len(m.suggestions) > start+10 {
-		b.WriteString(style.Render("...") + "\n")
-	}
-
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#00AAFF")).
-		Padding(0, 1).
-		Background(lipgloss.Color("#1A1A1A")).
-		Render(strings.TrimSuffix(b.String(), "\n"))
-}
-
-func (m Model) renderMenu() string {
-	style := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFFFF")).
-		Background(lipgloss.Color("#1A1A1A")).
-		Padding(0, 1)
-
-	activeStyle := style.Copy().
-		Foreground(lipgloss.Color("#000000")).
-		Background(lipgloss.Color("#00AAFF")).
-		Bold(true)
-
-	var b strings.Builder
-
-	title := " COMMANDS "
-	switch m.menuType {
-	case MenuSaveFavorite:
-		title = " SAVE FAVORITE "
-	case MenuRunFavorite:
-		title = " RUN FAVORITE "
-	}
-
-	b.WriteString(lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#00AAFF")).
-		Padding(0, 1).
-		Render(title))
-	b.WriteString("\n\n")
-
-	if m.menuType == MenuSaveFavorite {
-		b.WriteString("Enter name for favorite:\n")
-		b.WriteString(lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color("#333333")).
-			Padding(0, 1).
-			Width(30).
-			Render(m.favoriteInput + "_"))
-		b.WriteString("\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("Enter: Save • Esc: Cancel"))
-	} else {
-		commands := m.GetCommands()
-		for i, cmd := range commands {
-			line := cmd.Label
-			if i == m.menuIndex {
-				b.WriteString(activeStyle.Render(line) + "\n")
-			} else {
-				b.WriteString(style.Render(line) + "\n")
-			}
-		}
-	}
-
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#00AAFF")).
-		Padding(1, 1).
-		Background(lipgloss.Color("#1A1A1A")).
-		Render(b.String())
 }
