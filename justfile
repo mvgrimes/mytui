@@ -13,4 +13,7 @@ lint:
 release:
   git diff --exit-code
   git tag "{{VERSION}}"
+  git push
+  git release
+  git push --tags
   goreleaser release --clean
