@@ -191,33 +191,101 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.showSuggestions {
+			consumed := false
 			switch msg.String() {
 			case "up", "k", "shift+tab":
-				if m.suggestionIndex > 0 {
-					m.suggestionIndex--
-				} else {
-					m.suggestionIndex = len(m.suggestions) - 1
+				if len(m.suggestions) > 0 {
+					if m.suggestionIndex > 0 {
+						m.suggestionIndex--
+					} else {
+						m.suggestionIndex = len(m.suggestions) - 1
+					}
 				}
-			case "down", "j", "tab":
-				if m.suggestionIndex < len(m.suggestions)-1 {
-					m.suggestionIndex++
-				} else {
-					m.suggestionIndex = 0
+				consumed = true
+			case "down", "j":
+				if len(m.suggestions) > 0 {
+					if m.suggestionIndex < len(m.suggestions)-1 {
+						if m.suggestionIndex < 0 {
+							m.suggestionIndex = 0
+						} else {
+							m.suggestionIndex++
+						}
+					} else {
+						m.suggestionIndex = 0
+					}
 				}
+				consumed = true
+			case "tab":
+				if len(m.suggestions) > 0 {
+					if m.suggestionIndex < 0 {
+						m.suggestionIndex = 0
+					} else if m.suggestionIndex < len(m.suggestions)-1 {
+						m.suggestionIndex++
+					} else {
+						m.suggestionIndex = 0
+					}
+				}
+				consumed = true
 			case "enter":
-				m.applySuggestion()
-				m.showSuggestions = false
-			case "esc", "ctrl+k":
-				m.showSuggestions = false
+				if m.suggestionIndex >= 0 && m.suggestionIndex < len(m.suggestions) {
+					m.applySuggestion()
+					m.showSuggestions = false
+					consumed = true
+				}
+			case " ":
+				if m.suggestionIndex >= 0 && m.suggestionIndex < len(m.suggestions) {
+					m.applySuggestion()
+					m.showSuggestions = false
+					// Insert a trailing space after applying the suggestion
+					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeySpace})
+					consumed = true
+				}
+			case "esc":
+				if m.suggestionIndex >= 0 {
+					// First ESC: unselect
+					m.suggestionIndex = -1
+				} else {
+					// Second ESC: close overlay
+					m.showSuggestions = false
+				}
+				consumed = true
+			default:
+				// While suggestions are open, allow typing to edit the query.
+				// Recompute suggestions on every edit (Insert mode only).
+				if m.focus == FocusQuery && m.vimState.Mode == vim.InsertMode {
+					oldVal := m.textarea.Value()
+					var tiCmd tea.Cmd
+					m.textarea, tiCmd = m.textarea.Update(msg)
+					if m.textarea.Value() != oldVal {
+						m.recalculateHeight()
+						m.updateSuggestions()
+						if m.shouldOpenSuggestionsOnEdit() && len(m.suggestions) > 0 {
+							if m.suggestionIndex >= len(m.suggestions) {
+								m.suggestionIndex = -1
+							}
+							m.showSuggestions = true
+						} else {
+							m.showSuggestions = false
+						}
+					}
+					return m, tiCmd
+				}
 			}
-			return m, nil
+			if consumed {
+				return m, nil
+			}
+			// If not consumed, let other handlers process (e.g., Enter without selection)
 		}
 
 		switch msg.Type {
 		case tea.KeyCtrlK:
-			m.showSuggestions = true
-			m.suggestionIndex = 0
 			m.updateSuggestions()
+			if len(m.suggestions) > 0 {
+				m.showSuggestions = true
+				m.suggestionIndex = -1
+			} else {
+				m.showSuggestions = false
+			}
 			return m, nil
 		case tea.KeyCtrlP:
 			if m.focus == FocusQuery {
@@ -532,6 +600,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.textarea.Value() != oldVal {
 			m.lastError = parser.Validate(m.textarea.Value())
 			m.recalculateHeight()
+			// Always-on suggestions: recompute and open/close as needed
+			m.updateSuggestions()
+			if m.shouldOpenSuggestionsOnEdit() && len(m.suggestions) > 0 {
+				if !m.showSuggestions {
+					m.suggestionIndex = -1
+				} else if m.suggestionIndex >= len(m.suggestions) {
+					m.suggestionIndex = -1
+				}
+				m.showSuggestions = true
+			} else {
+				m.showSuggestions = false
+			}
 		}
 	} else if m.focus == FocusQuery && m.vimState.Mode == vim.NormalMode {
 		oldVal := m.textarea.Value()

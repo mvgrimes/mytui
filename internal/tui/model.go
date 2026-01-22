@@ -439,8 +439,8 @@ func (m *Model) applySuggestion() {
 
 	newText := text[:start] + s.Text + text[pos:]
 	m.textarea.SetValue(newText)
-	// We need to set the cursor back. This is also tricky with SetCursor.
-	// m.textarea.SetCursor(start + len(s.Text))
+	// Try to set cursor after the inserted suggestion text.
+	m.textarea.SetCursor(start + len(s.Text))
 }
 
 func isIdentifierChar(r rune) bool {
