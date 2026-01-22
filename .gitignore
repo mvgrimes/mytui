@@ -20,6 +20,12 @@ dist/
 
 # Samples
 
+# devcontainers (for now)
+/.devcontainer
+
+# plans
+/docs/plan/
+
 # Build artifacts
 /main
 /mytui
