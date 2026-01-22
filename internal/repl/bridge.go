@@ -2,7 +2,7 @@ package repl
 
 import (
 	"github.com/c-bata/go-prompt"
-	"github.com/mvgrimes/mycli-go/internal/completion"
+	"github.com/mvgrimes/mytui/internal/completion"
 )
 
 func (r *REPL) completerBridge(d prompt.Document) []prompt.Suggest {

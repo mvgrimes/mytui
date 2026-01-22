@@ -3,8 +3,8 @@ package ast
 import (
 	"strings"
 
-	"github.com/mvgrimes/mycli-go/internal/parser/dialect"
-	"github.com/mvgrimes/mycli-go/internal/parser/token"
+	"github.com/mvgrimes/mytui/internal/parser/dialect"
+	"github.com/mvgrimes/mytui/internal/parser/token"
 )
 
 type NodeType int

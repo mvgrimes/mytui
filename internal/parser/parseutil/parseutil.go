@@ -3,9 +3,9 @@ package parseutil
 import (
 	"fmt"
 
-	"github.com/mvgrimes/mycli-go/internal/parser/ast"
-	"github.com/mvgrimes/mycli-go/internal/parser/astutil"
-	"github.com/mvgrimes/mycli-go/internal/parser/token"
+	"github.com/mvgrimes/mytui/internal/parser/ast"
+	"github.com/mvgrimes/mytui/internal/parser/astutil"
+	"github.com/mvgrimes/mytui/internal/parser/token"
 )
 
 type TableInfo struct {

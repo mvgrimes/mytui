@@ -1,10 +1,10 @@
 # AGENTS.md - Developer's Guide for AI Agents
 
-This file provides context and instructions for AI agents working on the `mycli-go` project.
+This file provides context and instructions for AI agents working on the `mytui` project.
 
 ## Project Overview
 
-`mycli-go` is a reimplementation of the Python-based `mycli` in Go. It provides a terminal-based REPL for MySQL/MariaDB with auto-completion and syntax highlighting.
+`mytui` is a reimplementation of the Python-based `mycli` in Go. It provides a terminal-based REPL for MySQL/MariaDB with auto-completion and syntax highlighting.
 
 ## Architecture
 
@@ -15,7 +15,7 @@ The project is structured into several internal packages:
 -   `internal/completion`: Implements context-aware SQL auto-completion. It handles keywords, tables, and columns, including alias resolution (e.g., `u.id` -> `users.id`).
 -   `internal/formatter`: Responsible for rendering query results in various formats (`table`, `unicode`, `vertical`, `csv`, `tsv`). It uses `tablewriter` for tabular output.
 -   `internal/special`: Handles backslash commands (e.g., `\T`, `\f`, `\clip`, `\e`).
--   `internal/config`: Manages user configuration using `viper`. Config is stored in `~/.config/mycli-go/config.toml`.
+-   `internal/config`: Manages user configuration using `viper`. Config is stored in `~/.config/mytui/config.toml`.
 -   `internal/vim`: Implements the Vim-style keybinding state machine.
 
 ## Technical Stack

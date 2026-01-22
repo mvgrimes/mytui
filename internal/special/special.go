@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/atotto/clipboard"
-	"github.com/mvgrimes/mycli-go/internal/config"
-	"github.com/mvgrimes/mycli-go/internal/db"
-	"github.com/mvgrimes/mycli-go/internal/formatter"
+	"github.com/mvgrimes/mytui/internal/config"
+	"github.com/mvgrimes/mytui/internal/db"
+	"github.com/mvgrimes/mytui/internal/formatter"
 	"github.com/spf13/viper"
 )
 
@@ -378,7 +378,7 @@ func handleVersion(r REPL) {
 	cfg := r.GetConfig()
 	w := r.GetWriter()
 	fmt.Fprintln(w, "--------------")
-	fmt.Fprintln(w, "mycli-go 0.1.0")
+	fmt.Fprintln(w, "mytui 0.1.0")
 	fmt.Fprintf(w, "Pager:        %s\n", cfg.Pager)
 	fmt.Fprintf(w, "History file: %s\n", cfg.HistoryFile)
 	fmt.Fprintf(w, "Table format: %s\n", cfg.TableFormat)

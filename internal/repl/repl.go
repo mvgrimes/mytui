@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/c-bata/go-prompt"
-	"github.com/mvgrimes/mycli-go/internal/completion"
-	"github.com/mvgrimes/mycli-go/internal/config"
-	"github.com/mvgrimes/mycli-go/internal/db"
-	"github.com/mvgrimes/mycli-go/internal/formatter"
-	"github.com/mvgrimes/mycli-go/internal/special"
-	"github.com/mvgrimes/mycli-go/internal/vim"
+	"github.com/mvgrimes/mytui/internal/completion"
+	"github.com/mvgrimes/mytui/internal/config"
+	"github.com/mvgrimes/mytui/internal/db"
+	"github.com/mvgrimes/mytui/internal/formatter"
+	"github.com/mvgrimes/mytui/internal/special"
+	"github.com/mvgrimes/mytui/internal/vim"
 )
 
 type REPL struct {
@@ -79,7 +79,7 @@ func RunREPL(conn *db.Connection, cfg *config.Config) {
 
 	options := []prompt.Option{
 
-		prompt.OptionTitle("mycli-go"),
+		prompt.OptionTitle("mytui"),
 		prompt.OptionHistory(r.history),
 		prompt.OptionLivePrefix(livePrefix),
 		prompt.OptionPrefixTextColor(prompt.Cyan),
@@ -411,7 +411,7 @@ func (r *REPL) openExternalEditor() {
 		editor = "vi" // Default to vi
 	}
 
-	tempFile, err := os.CreateTemp("", "mycli-go-*.sql")
+	tempFile, err := os.CreateTemp("", "mytui-*.sql")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating temp file: %v\n", err)
 		return

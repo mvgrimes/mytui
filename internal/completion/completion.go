@@ -4,11 +4,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/mvgrimes/mycli-go/internal/parser"
-	"github.com/mvgrimes/mycli-go/internal/parser/ast"
-	"github.com/mvgrimes/mycli-go/internal/parser/astutil"
-	"github.com/mvgrimes/mycli-go/internal/parser/parseutil"
-	"github.com/mvgrimes/mycli-go/internal/parser/token"
+	"github.com/mvgrimes/mytui/internal/parser"
+	"github.com/mvgrimes/mytui/internal/parser/ast"
+	"github.com/mvgrimes/mytui/internal/parser/astutil"
+	"github.com/mvgrimes/mytui/internal/parser/parseutil"
+	"github.com/mvgrimes/mytui/internal/parser/token"
 )
 
 type Suggestion struct {

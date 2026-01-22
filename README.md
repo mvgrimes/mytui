@@ -1,10 +1,10 @@
-# mycli-go
+# mytui
 
 A command-line client for MySQL and MariaDB with auto-completion and syntax highlighting, reimagined in Go.
 
 ## Motivation
 
-`mycli-go` is a port of the popular [mycli](https://github.com/dbcli/mycli) tool from Python to Go. While the original `mycli` is an excellent tool, the Go implementation offers several key advantages:
+`mytui` is a port of the popular [mycli](https://github.com/dbcli/mycli) tool from Python to Go. While the original `mycli` is an excellent tool, the Go implementation offers several key advantages:
 
 *   **Zero Dependencies**: Distributes as a single static binary. No more Python environment issues or dependency conflicts.
 *   **Performance**: Improved startup time and faster rendering of large result sets.
@@ -26,7 +26,7 @@ A command-line client for MySQL and MariaDB with auto-completion and syntax high
 *   **Vim Mode**: Full Vim-style keybindings in the REPL (Normal/Insert modes).
 *   **External Editor**: Open your current query in your favorite editor with `\e`.
 *   **Clipboard Integration**: Quickly copy query results to your system clipboard with `\clip`.
-*   **Configuration**: Highly customizable via `~/.config/mycli-go/config.toml`.
+*   **Configuration**: Highly customizable via `~/.config/mytui/config.toml`.
 *   **Pager Support**: Automatic paging for large result sets using your system's `PAGER` (defaulting to `less`).
 *   **SSL Support**: Secure connections to your database instances.
 
@@ -37,15 +37,15 @@ A command-line client for MySQL and MariaDB with auto-completion and syntax high
 Ensure you have Go installed (1.24 or later), then run:
 
 ```bash
-go install github.com/mvgrimes/mycli-go/cmd/mycli-go@latest
+go install github.com/mvgrimes/mytui/cmd/mytui@latest
 ```
 
 Alternatively, clone the repository and build it manually:
 
 ```bash
-git clone https://github.com/mvgrimes/mycli-go.git
-cd mycli-go
-go build -o mycli-go ./cmd/mycli-go
+git clone https://github.com/mvgrimes/mytui.git
+cd mytui
+go build -o mytui ./cmd/mytui
 ```
 
 ## Usage
@@ -53,24 +53,24 @@ go build -o mycli-go ./cmd/mycli-go
 Connect to a database:
 
 ```bash
-mycli-go -h localhost -u root -p mypassword -D mydatabase
+mytui -h localhost -u root -p mypassword -D mydatabase
 ```
 
 Or using the positional argument for the database:
 
 ```bash
-mycli-go -u root mydatabase
+mytui -u root mydatabase
 ```
 
 Execute a query and quit:
 
 ```bash
-mycli-go -e "SELECT * FROM users LIMIT 10" mydatabase
+mytui -e "SELECT * FROM users LIMIT 10" mydatabase
 ```
 
 ### Special Commands
 
-`mycli-go` supports several backslash commands:
+`mytui` supports several backslash commands:
 
 *   `\T [format]`: Change the output format (table, vertical, csv, tsv, unicode).
 *   `\f [name] [args...]`: Execute a favorite query.
@@ -84,7 +84,7 @@ mycli-go -e "SELECT * FROM users LIMIT 10" mydatabase
 
 ## Configuration
 
-On first launch, a default configuration file is created at `~/.config/mycli-go/config.toml`. You can customize your prompt, default table format, syntax highlighting theme, and more.
+On first launch, a default configuration file is created at `~/.config/mytui/config.toml`. You can customize your prompt, default table format, syntax highlighting theme, and more.
 
 ## License
 

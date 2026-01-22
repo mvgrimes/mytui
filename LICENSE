@@ -22,7 +22,7 @@ SOFTWARE.
 
 -------------------------------------------------------------------------------
 
-This project, mycli-go, is a port of the mycli project (https://github.com/dbcli/mycli).
+This project, mytui, is a port of the mycli project (https://github.com/dbcli/mycli).
 The original mycli project is licensed under the BSD 3-Clause License.
 
 Copyright (c) 2014-2025, Mycli Core Team (https://github.com/dbcli/mycli)

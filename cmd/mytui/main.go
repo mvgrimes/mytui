@@ -8,18 +8,18 @@ import (
 	"github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"github.com/mvgrimes/mycli-go/internal/config"
-	"github.com/mvgrimes/mycli-go/internal/db"
-	"github.com/mvgrimes/mycli-go/internal/formatter"
-	"github.com/mvgrimes/mycli-go/internal/repl"
-	"github.com/mvgrimes/mycli-go/internal/tui"
+	"github.com/mvgrimes/mytui/internal/config"
+	"github.com/mvgrimes/mytui/internal/db"
+	"github.com/mvgrimes/mytui/internal/formatter"
+	"github.com/mvgrimes/mytui/internal/repl"
+	"github.com/mvgrimes/mytui/internal/tui"
 )
 
 var version = "0.1.0"
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "mycli-go",
+		Use:   "mytui",
 		Short: "A MySQL terminal client with auto-completion and syntax highlighting",
 		Long: `mycli is a command line interface for MySQL and MariaDB that provides
 auto-completion, syntax highlighting, and other useful features for database
@@ -29,7 +29,7 @@ administration and development.`,
 	}
 
 	// Disable default help flag to avoid conflict with -h for host
-	rootCmd.Flags().BoolP("help", "", false, "help for mycli-go")
+	rootCmd.Flags().BoolP("help", "", false, "help for mytui")
 
 	// Connection flags
 	rootCmd.Flags().StringP("host", "h", "localhost", "Host address of the database")
@@ -92,7 +92,7 @@ func runREPL(cmd *cobra.Command, args []string) error {
 			TableFormat: "table",
 			SyntaxStyle: "monokai",
 			KeyBindings: "vim",
-			HistoryFile: "/tmp/mycli-go_history",
+			HistoryFile: "/tmp/mytui_history",
 		}
 	}
 

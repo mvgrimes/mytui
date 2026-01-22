@@ -22,4 +22,4 @@ dist/
 
 # Build artifacts
 /main
-/mycli-go
+/mytui

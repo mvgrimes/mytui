@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mvgrimes/mycli-go/internal/db"
+	"github.com/mvgrimes/mytui/internal/db"
 )
 
 type DBCache struct {

@@ -158,7 +158,7 @@ CLI Args/Config → Main App → REPL Engine ↔ SQL Executor
 ## Directory Structure
 
 ```
-mycli-go/
+mytui/
 ├── cmd/
 │   └── mycli/
 │       └── main.go

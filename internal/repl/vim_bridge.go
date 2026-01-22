@@ -2,7 +2,7 @@ package repl
 
 import (
 	"github.com/c-bata/go-prompt"
-	"github.com/mvgrimes/mycli-go/internal/vim"
+	"github.com/mvgrimes/mytui/internal/vim"
 )
 
 func (r *REPL) getVimKeyBindings() []prompt.KeyBind {

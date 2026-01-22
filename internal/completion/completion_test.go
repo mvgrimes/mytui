@@ -1,7 +1,7 @@
 package completion
 
 import (
-	"github.com/mvgrimes/mycli-go/internal/db"
+	"github.com/mvgrimes/mytui/internal/db"
 	"testing"
 )
 

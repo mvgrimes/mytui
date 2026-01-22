@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mvgrimes/mycli-go/internal/parser"
-	"github.com/mvgrimes/mycli-go/internal/parser/ast"
-	"github.com/mvgrimes/mycli-go/internal/parser/dialect"
-	"github.com/mvgrimes/mycli-go/internal/parser/token"
+	"github.com/mvgrimes/mytui/internal/parser"
+	"github.com/mvgrimes/mytui/internal/parser/ast"
+	"github.com/mvgrimes/mytui/internal/parser/dialect"
+	"github.com/mvgrimes/mytui/internal/parser/token"
 )
 
 type Diagnostic struct {

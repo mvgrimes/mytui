@@ -1,4 +1,4 @@
-module github.com/mvgrimes/mycli-go
+module github.com/mvgrimes/mytui
 
 go 1.25.4
 
@@ -13,6 +13,7 @@ require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/mattn/go-runewidth v0.0.19
 	github.com/olekukonko/tablewriter v0.0.5
+	github.com/rmhubbert/bubbletea-overlay v0.6.4
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	golang.org/x/term v0.39.0
@@ -44,7 +45,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/term v1.2.0-beta.2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/rmhubbert/bubbletea-overlay v0.6.4 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
 	github.com/spf13/afero v1.15.0 // indirect

@@ -8,11 +8,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/mvgrimes/mycli-go/internal/completion"
-	"github.com/mvgrimes/mycli-go/internal/formatter"
-	"github.com/mvgrimes/mycli-go/internal/parser"
-	"github.com/mvgrimes/mycli-go/internal/special"
-	"github.com/mvgrimes/mycli-go/internal/vim"
+	"github.com/mvgrimes/mytui/internal/completion"
+	"github.com/mvgrimes/mytui/internal/formatter"
+	"github.com/mvgrimes/mytui/internal/parser"
+	"github.com/mvgrimes/mytui/internal/special"
+	"github.com/mvgrimes/mytui/internal/vim"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 

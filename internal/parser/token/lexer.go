@@ -7,7 +7,7 @@ import (
 	"strings"
 	"text/scanner"
 
-	"github.com/mvgrimes/mycli-go/internal/parser/dialect"
+	"github.com/mvgrimes/mytui/internal/parser/dialect"
 )
 
 type SQLWord struct {

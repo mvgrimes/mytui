@@ -22,7 +22,7 @@ builds:
       - linux
       # - windows
       - darwin
-    main: ./cmd/mycli-go/main.go
+    main: ./cmd/mytui/main.go
 
 archives:
   - formats: [tar.gz]

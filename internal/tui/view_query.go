@@ -7,7 +7,7 @@ import (
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/mvgrimes/mycli-go/internal/vim"
+	"github.com/mvgrimes/mytui/internal/vim"
 )
 
 func (m Model) renderHighlightedText(text string) string {

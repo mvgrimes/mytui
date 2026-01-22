@@ -1,9 +1,9 @@
-APP      := "mycli-go"
-VERSION  := `perl -nE'm{version\s*=\s*"(\d+\.\d+.\d+)"} && print $1' ./cmd/mycli-go/main.go`
+APP      := "mytui"
+VERSION  := `perl -nE'm{version\s*=\s*"(\d+\.\d+.\d+)"} && print $1' ./cmd/mytui/main.go`
 
 build:
   echo "Building verions {{VERSION}} of {{APP}}"
-  go build -o mycli-go cmd/mycli-go/main.go
+  go build -o mytui cmd/mytui/main.go
 
 lint:
   go vet ./... || true

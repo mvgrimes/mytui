@@ -13,8 +13,8 @@ import (
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/fatih/color"
 	runewidth "github.com/mattn/go-runewidth"
-	"github.com/mvgrimes/mycli-go/internal/config"
-	"github.com/mvgrimes/mycli-go/internal/db"
+	"github.com/mvgrimes/mytui/internal/config"
+	"github.com/mvgrimes/mytui/internal/db"
 	"github.com/olekukonko/tablewriter"
 	"golang.org/x/term"
 )

@@ -30,7 +30,7 @@ func LoadConfig(customPath string) (*Config, error) {
 		return nil, fmt.Errorf("could not find home directory: %v", err)
 	}
 
-	configDir := filepath.Join(home, ".config", "mycli-go")
+	configDir := filepath.Join(home, ".config", "mytui")
 
 	viper.SetDefault("table_format", "table")
 	viper.SetDefault("syntax_style", "monokai")
