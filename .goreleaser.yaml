@@ -52,3 +52,9 @@ release:
     ---
 
     Released by [GoReleaser](https://github.com/goreleaser/goreleaser).
+
+homebrew_casks:
+  - name: mytui
+    repository:
+      owner: mvgrimes
+      name: homebrew-tap
