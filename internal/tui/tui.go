@@ -198,7 +198,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showSuggestions {
 			consumed := false
 			switch msg.String() {
-			case "up", "k", "shift+tab":
+			case "up", "shift+tab":
 				if len(m.suggestions) > 0 {
 					if m.suggestionIndex > 0 {
 						m.suggestionIndex--
@@ -207,7 +207,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				consumed = true
-			case "down", "j":
+			case "down":
 				if len(m.suggestions) > 0 {
 					if m.suggestionIndex < len(m.suggestions)-1 {
 						if m.suggestionIndex < 0 {
