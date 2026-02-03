@@ -32,7 +32,7 @@ func LoadConfig(customPath string) (*Config, error) {
 
 	configDir := filepath.Join(home, ".config", "mytui")
 
-	viper.SetDefault("table_format", "table")
+	viper.SetDefault("table_format", "unicode")
 	viper.SetDefault("syntax_style", "monokai")
 	viper.SetDefault("key_bindings", "vim")
 	viper.SetDefault("history_file", filepath.Join(configDir, "history"))

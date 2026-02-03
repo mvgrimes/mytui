@@ -89,7 +89,7 @@ func runREPL(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not load config: %v\n", err)
 		cfg = &config.Config{
-			TableFormat: "table",
+			TableFormat: "unicode",
 			SyntaxStyle: "monokai",
 			KeyBindings: "vim",
 			HistoryFile: "/tmp/mytui_history",
