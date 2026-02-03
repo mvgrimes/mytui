@@ -73,7 +73,12 @@ func (m *Model) recalculateHeight() {
 	for _, r := range m.results {
 		r.Viewport.Width = m.width
 		if r.Expanded {
-			lines := strings.Count(r.Formatted, "\n") + 1
+			// Use FormattedData if available (pinned header case), otherwise use full Formatted
+			content := r.FormattedData
+			if content == "" {
+				content = r.Formatted
+			}
+			lines := strings.Count(content, "\n") + 1
 			height := lines
 			if height > r.DisplaySize {
 				height = r.DisplaySize
@@ -462,7 +467,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if err == nil {
 					res.DbResult = newResult
 					res.Formatted = formatter.FormatResult(newResult, res.Format, m.config)
-					res.Viewport.SetContent(res.Formatted)
+					res.FormattedHeader, res.FormattedData = splitTableHeaderAndData(res.Formatted, res.Format)
+					res.Viewport.SetContent(res.FormattedData)
 					res.Timestamp = time.Now()
 					res.Duration = newResult.Duration
 				}
@@ -779,6 +785,11 @@ func (m Model) View() string {
 		resultsView = append(resultsView, m.renderResultHeader(r, focused))
 		resultsLines += 1
 		if r.Expanded {
+			// Render pinned header if available (for table formats)
+			if r.FormattedHeader != "" {
+				resultsView = append(resultsView, r.FormattedHeader)
+				resultsLines += strings.Count(r.FormattedHeader, "\n") + 1
+			}
 			resultsView = append(resultsView, r.Viewport.View())
 			resultsLines += r.Viewport.Height
 		}

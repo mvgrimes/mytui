@@ -33,15 +33,17 @@ const (
 )
 
 type Result struct {
-	Query       string
-	Timestamp   time.Time
-	DisplaySize int
-	Expanded    bool
-	DbResult    *db.Result
-	Duration    time.Duration
-	Formatted   string
-	Viewport    viewport.Model
-	Format      formatter.Format
+	Query           string
+	Timestamp       time.Time
+	DisplaySize     int
+	Expanded        bool
+	DbResult        *db.Result
+	Duration        time.Duration
+	Formatted       string
+	FormattedHeader string // Pinned header (first 3 lines of table)
+	FormattedData   string // Scrollable data (remaining lines)
+	Viewport        viewport.Model
+	Format          formatter.Format
 }
 
 type MenuType int
@@ -294,18 +296,24 @@ func (m *Model) GetWriter() io.Writer                { return &m.specialOutput }
 
 func (m *Model) addResult(result *db.Result, query string, format formatter.Format) {
 	fullResult := formatter.FormatResult(result, format, m.config)
+
+	// Split into header (first 3 lines) and data for pinned header
+	header, data := splitTableHeaderAndData(fullResult, format)
+
 	r := &Result{
-		Query:       query,
-		Timestamp:   time.Now(),
-		Duration:    result.Duration,
-		DisplaySize: 10,
-		Expanded:    true,
-		DbResult:    result,
-		Formatted:   fullResult,
-		Viewport:    viewport.New(m.width, 10),
-		Format:      format,
+		Query:           query,
+		Timestamp:       time.Now(),
+		Duration:        result.Duration,
+		DisplaySize:     10,
+		Expanded:        true,
+		DbResult:        result,
+		Formatted:       fullResult,
+		FormattedHeader: header,
+		FormattedData:   data,
+		Viewport:        viewport.New(m.width, 7), // Reduced height to account for pinned header
+		Format:          format,
 	}
-	r.Viewport.SetContent(fullResult)
+	r.Viewport.SetContent(data)
 	m.results = append(m.results, r)
 	m.focusedResult = len(m.results) - 1
 	if len(m.results) > m.config.MaxResults {
@@ -330,6 +338,28 @@ func (m *Model) addResultFromText(text string, query string) {
 		m.results = m.results[1:]
 		m.focusedResult--
 	}
+}
+
+// splitTableHeaderAndData splits a formatted table into header (first 3 lines) and data portions.
+// For table formats (unicode, table), the first 3 lines are: top border, column headers, separator.
+// For other formats (csv, tsv, vertical), no split is performed.
+func splitTableHeaderAndData(formatted string, format formatter.Format) (header, data string) {
+	// Only split for table formats that have a clear header structure
+	if format != formatter.FormatUnicode && format != formatter.FormatTable {
+		return "", formatted
+	}
+
+	lines := strings.Split(formatted, "\n")
+	if len(lines) <= 3 {
+		// Not enough lines to split, return as-is
+		return "", formatted
+	}
+
+	// Header is first 3 lines (top border, headers, separator)
+	header = strings.Join(lines[:3], "\n")
+	// Data is the rest (data rows + bottom border)
+	data = strings.Join(lines[3:], "\n")
+	return header, data
 }
 
 func (m *Model) ExecuteQueryWithFormat(query string, format formatter.Format) {
