@@ -721,57 +721,6 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 func (m Model) View() string {
 	m.UpdateCursorStyle()
 
-	user := m.conn.Config.User
-	host := m.conn.Config.Host
-	port := m.conn.Config.Port
-	database := m.conn.GetCurrentDatabase()
-
-	bg := lipgloss.Color("#3C3C3C")
-	userStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(bg)
-	if user == "root" {
-		userStyle = userStyle.Foreground(lipgloss.Color("#FF5555")).Bold(true)
-	}
-
-	hostStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(bg)
-	isLocal := host == "localhost" || host == "127.0.0.1" || m.conn.Config.Socket != ""
-	if !isLocal {
-		hostStyle = hostStyle.Foreground(lipgloss.Color("#FFA500"))
-	}
-
-	atStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).Background(bg)
-	restStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(bg)
-
-	statusLineStyle := lipgloss.NewStyle().
-		Background(bg).
-		Width(m.width)
-
-	statusStr := lipgloss.JoinHorizontal(lipgloss.Left,
-		" ",
-		userStyle.Render(user),
-		atStyle.Render("@"),
-		hostStyle.Render(host),
-		restStyle.Render(fmt.Sprintf(":%d/%s ", port, database)),
-	)
-
-	mode := " INSERT "
-	if m.vimState.Mode == vim.NormalMode {
-		mode = " NORMAL "
-	}
-
-	renderedStatus := statusStr
-	renderedMode := modeStyle.Render(mode)
-
-	fillerWidth := m.width - lipgloss.Width(renderedStatus) - lipgloss.Width(renderedMode)
-	if fillerWidth < 0 {
-		fillerWidth = 0
-	}
-
-	statusLine := statusLineStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left,
-		renderedStatus,
-		strings.Repeat(" ", fillerWidth),
-		renderedMode,
-	))
-
 	qHeader := m.renderQueryHeader(m.focus == FocusQuery)
 
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Margin(0, 1)
@@ -806,7 +755,6 @@ func (m Model) View() string {
 		qHeader,
 		queryView,
 		helpText,
-		statusLine,
 	)
 
 	if m.showSuggestions {

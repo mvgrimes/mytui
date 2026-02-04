@@ -264,7 +264,7 @@ func printUnicode(result *db.Result, out io.Writer, cfg *config.Config) {
 	drawLine("┌", "┬", "┐", "─")
 
 	// Headers
-	headerColor := color.New(color.Bold, color.FgCyan)
+	headerColor := color.New(color.Bold, color.FgBlue)
 	fmt.Fprint(out, "│")
 	for i, h := range result.Headers {
 		w := runewidth.StringWidth(h)
@@ -311,7 +311,7 @@ func printVertical(result *db.Result, out io.Writer) {
 		}
 	}
 
-	headerColor := color.New(color.Bold, color.FgCyan)
+	headerColor := color.New(color.Bold, color.FgBlue)
 	separator := color.New(color.FgHiBlack)
 
 	for i, row := range result.Rows {

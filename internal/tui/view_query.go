@@ -120,13 +120,80 @@ func (m Model) renderQueryArea() string {
 }
 
 func (m Model) renderQueryHeader(focused bool) string {
-	icon := " 🔍 "
-	header := fmt.Sprintf("%s QUERY", icon)
-
-	style := headerStyle
+	// Determine background color based on focus
+	bg := lipgloss.Color("#222222")
+	defaultFg := lipgloss.Color("#AAAAAA")
 	if focused {
-		style = headerFocusStyle
+		bg = lipgloss.Color("#FAB283")
+		defaultFg = lipgloss.Color("#0A0A0A")
 	}
 
-	return style.Width(m.width).Render(header)
+	// Base style with background for all elements
+	baseStyle := lipgloss.NewStyle().Background(bg)
+
+	// Build QUERY label
+	icon := " ≡ "
+	labelStyle := baseStyle.Foreground(defaultFg)
+	if focused {
+		labelStyle = labelStyle.Bold(true)
+	}
+	label := labelStyle.Render(fmt.Sprintf("%sQUERY", icon))
+
+	// Separator between QUERY and connection string
+	sepStyle := baseStyle.Foreground(lipgloss.Color("#222222"))
+	separator := sepStyle.Render("  •  ")
+
+	// Build connection string with conditional coloring
+	user := m.conn.Config.User
+	host := m.conn.Config.Host
+	port := m.conn.Config.Port
+	database := m.conn.GetCurrentDatabase()
+
+	userStyle := baseStyle.Foreground(defaultFg)
+	if user == "root" {
+		userStyle = userStyle.Foreground(lipgloss.Color("#FF5555")).Bold(true)
+	}
+
+	hostStyle := baseStyle.Foreground(defaultFg)
+	isLocal := host == "localhost" || host == "127.0.0.1" || m.conn.Config.Socket != ""
+	if !isLocal {
+		hostStyle = hostStyle.Foreground(lipgloss.Color("#AA4400"))
+	}
+
+	atStyle := baseStyle.Foreground(lipgloss.Color("#888888"))
+	restStyle := baseStyle.Foreground(defaultFg)
+
+	connStr := lipgloss.JoinHorizontal(lipgloss.Left,
+		userStyle.Render(user),
+		atStyle.Render("@"),
+		hostStyle.Render(host),
+		restStyle.Render(fmt.Sprintf(":%d/%s", port, database)),
+	)
+
+	// Build mode indicator with square brackets
+	var modeStr string
+	modeStyle := baseStyle.Bold(true)
+	if m.vimState.Mode == vim.NormalMode {
+		modeStyle = modeStyle.Foreground(lipgloss.Color("#DCFEAF"))
+		modeStr = modeStyle.Render("[NORMAL]")
+	} else {
+		modeStyle = modeStyle.Foreground(lipgloss.Color("#222222"))
+		modeStr = modeStyle.Render("[INSERT]")
+	}
+
+	// Calculate filler width
+	leftPart := label + separator + connStr
+	leftWidth := lipgloss.Width(leftPart)
+	rightWidth := lipgloss.Width(modeStr)
+	fillerWidth := m.width - leftWidth - rightWidth - 1 // -1 for trailing space
+	if fillerWidth < 1 {
+		fillerWidth = 1
+	}
+
+	fillerStyle := lipgloss.NewStyle().Background(bg)
+	filler := fillerStyle.Render(strings.Repeat(" ", fillerWidth))
+
+	// Combine all parts
+	headerStyle := lipgloss.NewStyle().Background(bg).Width(m.width)
+	return headerStyle.Render(leftPart + filler + modeStr)
 }
