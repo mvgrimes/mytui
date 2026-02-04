@@ -419,9 +419,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "h", "left":
 				res.Viewport.ScrollLeft(5)
+				res.XOffset -= 5
+				if res.XOffset < 0 {
+					res.XOffset = 0
+				}
 				return m, nil
 			case "l", "right":
 				res.Viewport.ScrollRight(5)
+				res.XOffset += 5
 				return m, nil
 			case "G":
 				res.Viewport.GotoBottom()
@@ -787,7 +792,8 @@ func (m Model) View() string {
 		if r.Expanded {
 			// Render pinned header if available (for table formats)
 			if r.FormattedHeader != "" {
-				resultsView = append(resultsView, r.FormattedHeader)
+				header := applyHorizontalOffset(r.FormattedHeader, r.XOffset, m.width)
+				resultsView = append(resultsView, header)
 				resultsLines += strings.Count(r.FormattedHeader, "\n") + 1
 			}
 			resultsView = append(resultsView, r.Viewport.View())

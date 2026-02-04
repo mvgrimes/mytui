@@ -44,6 +44,7 @@ type Result struct {
 	FormattedData   string // Scrollable data (remaining lines)
 	Viewport        viewport.Model
 	Format          formatter.Format
+	XOffset         int // Track horizontal scroll offset for pinned header
 }
 
 type MenuType int

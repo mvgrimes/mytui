@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 func (m Model) renderResultHeader(r *Result, focused bool) string {
@@ -34,4 +36,31 @@ func (m Model) renderResultHeader(r *Result, focused bool) string {
 	}
 
 	return style.Width(m.width).Render(header)
+}
+
+// applyHorizontalOffset shifts a multi-line string horizontally by the given offset.
+// This is used to sync the pinned header with the viewport's horizontal scroll.
+// Uses ANSI-aware truncation to properly handle color codes.
+func applyHorizontalOffset(s string, offset, width int) string {
+	if offset == 0 {
+		return s
+	}
+
+	lines := strings.Split(s, "\n")
+	result := make([]string, len(lines))
+
+	for i, line := range lines {
+		// Use ANSI-aware truncation from the left
+		if offset > 0 {
+			line = ansi.TruncateLeft(line, offset, "")
+		}
+		// Pad to width if needed (using ANSI-aware width calculation)
+		lineWidth := ansi.StringWidth(line)
+		if lineWidth < width {
+			line = line + strings.Repeat(" ", width-lineWidth)
+		}
+		result[i] = line
+	}
+
+	return strings.Join(result, "\n")
 }
