@@ -112,9 +112,9 @@ func RenderResult(result *db.Result, writer io.Writer, format Format, cfg *confi
 		case FormatTSV:
 			printCSV(result, writer, "\t")
 		case FormatUnicode:
-			printUnicode(result, writer)
+			printUnicode(result, writer, cfg)
 		default:
-			printTable(result, writer)
+			printTable(result, writer, cfg)
 		}
 	} else if result.Status != "" {
 		if cfg.Timing {
@@ -177,7 +177,13 @@ func formatValue(val interface{}) string {
 	}
 }
 
-func printTable(result *db.Result, out io.Writer) {
+func printTable(result *db.Result, out io.Writer, cfg *config.Config) {
+	maxWidth := cfg.ColumnMaxWidth
+	if maxWidth <= 0 {
+		maxWidth = 32
+	}
+	truncatedColor := color.New(color.FgYellow)
+
 	table := tablewriter.NewWriter(out)
 	table.SetHeader(result.Headers)
 	table.SetAutoFormatHeaders(false)
@@ -195,28 +201,47 @@ func printTable(result *db.Result, out io.Writer) {
 	for _, row := range result.Rows {
 		rowStrings := make([]string, len(row))
 		for i, val := range row {
-			rowStrings[i] = formatValue(val)
+			valStr := formatValue(val)
+			if runewidth.StringWidth(valStr) > maxWidth {
+				valStr = runewidth.Truncate(valStr, maxWidth-1, "") + truncatedColor.Sprint("…")
+			}
+			rowStrings[i] = valStr
 		}
 		table.Append(rowStrings)
 	}
 	table.Render()
 }
 
-func printUnicode(result *db.Result, out io.Writer) {
+func printUnicode(result *db.Result, out io.Writer, cfg *config.Config) {
+	maxWidth := cfg.ColumnMaxWidth
+	if maxWidth <= 0 {
+		maxWidth = 32
+	}
+	truncatedColor := color.New(color.FgYellow)
+
 	// Calculate column widths
 	widths := make([]int, len(result.Headers))
 	for i, h := range result.Headers {
 		widths[i] = runewidth.StringWidth(h)
 	}
 
-	// Convert all rows to strings and update widths
+	// Convert all rows to strings, truncate if needed, and update widths
 	rows := make([][]string, len(result.Rows))
+	truncated := make([][]bool, len(result.Rows))
 	for i, row := range result.Rows {
 		rows[i] = make([]string, len(row))
+		truncated[i] = make([]bool, len(row))
 		for j, val := range row {
 			str := formatValue(val)
+			if runewidth.StringWidth(str) > maxWidth {
+				str = runewidth.Truncate(str, maxWidth-1, "")
+				truncated[i][j] = true
+			}
 			rows[i][j] = str
 			w := runewidth.StringWidth(str)
+			if truncated[i][j] {
+				w++ // account for ellipsis
+			}
 			if w > widths[j] {
 				widths[j] = w
 			}
@@ -253,12 +278,20 @@ func printUnicode(result *db.Result, out io.Writer) {
 	drawLine("├", "┼", "┤", "─")
 
 	// Rows
-	for _, row := range rows {
+	for i, row := range rows {
 		fmt.Fprint(out, "│")
-		for i, val := range row {
+		for j, val := range row {
 			w := runewidth.StringWidth(val)
-			padding := strings.Repeat(" ", widths[i]-w)
-			fmt.Fprintf(out, " %s%s ", val, padding)
+			if truncated[i][j] {
+				w++ // account for ellipsis in padding calculation
+			}
+			padding := strings.Repeat(" ", widths[j]-w)
+			fmt.Fprint(out, " ")
+			fmt.Fprint(out, val)
+			if truncated[i][j] {
+				truncatedColor.Fprint(out, "…")
+			}
+			fmt.Fprintf(out, "%s ", padding)
 			fmt.Fprint(out, "│")
 		}
 		fmt.Fprintln(out)

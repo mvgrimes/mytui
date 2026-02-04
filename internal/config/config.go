@@ -21,7 +21,8 @@ type Config struct {
 	FavoriteQueries    map[string]string `mapstructure:"favorite_queries"`
 	AutoVerticalOutput bool              `mapstructure:"auto_vertical_output"`
 	MultiLine          bool              `mapstructure:"multi_line"`
-	MaxResults         int               `mapstructure:"max_results"`
+	MaxResults     int               `mapstructure:"max_results"`
+	ColumnMaxWidth int               `mapstructure:"column_max_width"`
 }
 
 func LoadConfig(customPath string) (*Config, error) {
@@ -45,6 +46,7 @@ func LoadConfig(customPath string) (*Config, error) {
 	viper.SetDefault("auto_vertical_output", true)
 	viper.SetDefault("multi_line", false)
 	viper.SetDefault("max_results", 5)
+	viper.SetDefault("column_max_width", 32)
 
 	if customPath != "" {
 		viper.SetConfigFile(customPath)
