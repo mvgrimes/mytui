@@ -269,11 +269,28 @@ func printUnicode(result *db.Result, out io.Writer) {
 }
 
 func printVertical(result *db.Result, out io.Writer) {
+	// Find maximum header width for alignment
+	maxHeaderWidth := 0
+	for _, header := range result.Headers {
+		w := runewidth.StringWidth(header)
+		if w > maxHeaderWidth {
+			maxHeaderWidth = w
+		}
+	}
+
+	headerColor := color.New(color.Bold, color.FgCyan)
+	separator := color.New(color.FgHiBlack)
+
 	for i, row := range result.Rows {
-		fmt.Fprintf(out, "*************************** %d. row ***************************\n", i+1)
+		separator.Fprintf(out, "*************************** %d. row ***************************\n", i+1)
 		for j, header := range result.Headers {
 			valStr := formatValue(row[j])
-			fmt.Fprintf(out, "%s: %s\n", header, valStr)
+			// Right-align the header
+			headerWidth := runewidth.StringWidth(header)
+			padding := strings.Repeat(" ", maxHeaderWidth-headerWidth)
+			fmt.Fprint(out, padding)
+			headerColor.Fprint(out, header)
+			fmt.Fprintf(out, ": %s\n", valStr)
 		}
 	}
 }
