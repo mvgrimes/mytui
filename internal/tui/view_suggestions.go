@@ -50,7 +50,8 @@ func (m Model) renderSuggestions() string {
 }
 
 // computeSuggestionOffsets calculates the overlay offsets to place the suggestions popup
-// near the cursor, just above and to the right, given the current layout.
+// near the cursor. Prefers placing above the cursor, but if there's not enough space,
+// places below the cursor instead.
 func (m Model) computeSuggestionOffsets(resultsLines, fgHeight int) (int, int) {
 	// Where the query area starts (number of lines in results view plus a header line)
 	queryTop := resultsLines + 1
@@ -60,6 +61,15 @@ func (m Model) computeSuggestionOffsets(resultsLines, fgHeight int) (int, int) {
 	// Account for line number gutter "NN | " which is width 5
 	gutter := 5
 	xOff := gutter + curCol + 1
+
+	// Try to place above the cursor
 	yOff := queryTop + curLine - fgHeight
+
+	// If not enough space above (would go off-screen or overlap with top),
+	// place below the cursor instead
+	if yOff < 0 {
+		yOff = queryTop + curLine + 1
+	}
+
 	return xOff, yOff
 }

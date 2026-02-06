@@ -838,11 +838,34 @@ func (m Model) View() string {
 	)
 
 	if m.showSuggestions {
-		// Overlay suggestions near the text cursor, just above and to the right.
+		// Overlay suggestions near the text cursor
 		bg := view
 		fg := m.renderSuggestions()
-		_, fgHeight := lipgloss.Size(fg)
+		fgWidth, fgHeight := lipgloss.Size(fg)
 		xOff, yOff := m.computeSuggestionOffsets(resultsLines, fgHeight)
+
+		// Ensure background is tall enough for suggestions placed below cursor
+		bgWidth, bgHeight := lipgloss.Size(bg)
+		requiredHeight := yOff + fgHeight
+		if requiredHeight > bgHeight {
+			padding := strings.Repeat("\n", requiredHeight-bgHeight)
+			bg = bg + padding
+		}
+
+		// Ensure background is wide enough for suggestions
+		requiredWidth := xOff + fgWidth
+		if requiredWidth > bgWidth {
+			// Pad each line to required width
+			lines := strings.Split(bg, "\n")
+			for i, line := range lines {
+				lineWidth := lipgloss.Width(line)
+				if lineWidth < requiredWidth {
+					lines[i] = line + strings.Repeat(" ", requiredWidth-lineWidth)
+				}
+			}
+			bg = strings.Join(lines, "\n")
+		}
+
 		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, xOff, yOff)
 	}
 
