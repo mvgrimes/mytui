@@ -484,8 +484,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.focus == FocusQuery {
 			if m.vimState.Mode == vim.NormalMode {
 				keyStr := msg.String()
+
+				// Handle f/F pending - find character
+				if m.vimPendingKey == "f" || m.vimPendingKey == "F" {
+					if len(keyStr) == 1 {
+						targetChar := rune(keyStr[0])
+						m.findCharInLine(targetChar, m.vimPendingKey == "f")
+					}
+					m.vimPendingKey = ""
+					return m, nil
+				}
+
+				// Handle ci/di pending - inner text object
+				if m.vimPendingKey == "ci" || m.vimPendingKey == "di" {
+					if keyStr == "w" {
+						// ciw/diw - change/delete inner word
+						m.deleteInnerWord()
+						if m.vimPendingKey == "ci" {
+							m.vimState.Mode = vim.InsertMode
+							m.vimPendingKey = ""
+							return m, m.textarea.Focus()
+						}
+					}
+					m.vimPendingKey = ""
+					return m, nil
+				}
+
 				switch keyStr {
 				case "i":
+					if m.vimPendingKey == "c" || m.vimPendingKey == "d" {
+						m.vimPendingKey = m.vimPendingKey + "i"
+						return m, nil
+					}
 					m.vimState.Mode = vim.InsertMode
 					return m, m.textarea.Focus()
 				case "a":
@@ -523,8 +553,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case "b":
 					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyLeft, Alt: true})
 				case "0", "^":
+					if m.vimPendingKey == "d" {
+						// d0 - delete to start of line
+						m.deleteToLineStart()
+						m.vimPendingKey = ""
+						return m, nil
+					} else if m.vimPendingKey == "c" {
+						// c0 - change to start of line
+						m.deleteToLineStart()
+						m.vimState.Mode = vim.InsertMode
+						m.vimPendingKey = ""
+						return m, m.textarea.Focus()
+					}
 					m.textarea.CursorStart()
 				case "$":
+					if m.vimPendingKey == "d" {
+						// d$ - delete to end of line
+						m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+						m.vimPendingKey = ""
+						return m, nil
+					} else if m.vimPendingKey == "c" {
+						// c$ - change to end of line
+						m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+						m.vimState.Mode = vim.InsertMode
+						m.vimPendingKey = ""
+						return m, m.textarea.Focus()
+					}
 					m.textarea.CursorEnd()
 				case "o":
 					m.vimState.Mode = vim.InsertMode
@@ -567,10 +621,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				case "x":
 					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
+				case "f":
+					m.vimPendingKey = "f"
+					return m, nil
+				case "F":
+					m.vimPendingKey = "F"
+					return m, nil
 				default:
 					m.vimPendingKey = ""
 				}
-				if keyStr != "d" && keyStr != "c" {
+				if keyStr != "d" && keyStr != "c" && keyStr != "f" && keyStr != "F" && keyStr != "i" {
 					m.vimPendingKey = ""
 				}
 				return m, nil

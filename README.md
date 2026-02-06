@@ -82,6 +82,68 @@ mytui -e "SELECT * FROM users LIMIT 10" mydatabase
 *   `\| [command]`: Pipe the next result to a shell command.
 *   `\q`: Quit the application.
 
+## Vim Keybindings
+
+`mytui` supports Vim-style keybindings in the query editor. Press `Esc` to enter Normal mode, and `i` to return to Insert mode.
+
+### Normal Mode
+
+#### Movement
+| Key | Action |
+|-----|--------|
+| `h` | Move cursor left |
+| `l` | Move cursor right |
+| `j` | Move cursor down |
+| `k` | Move cursor up |
+| `w` | Move to next word |
+| `b` | Move to previous word |
+| `0` or `^` | Move to start of line |
+| `$` | Move to end of line |
+| `f{char}` | Jump to next occurrence of {char} on current line |
+| `F{char}` | Jump to previous occurrence of {char} on current line |
+
+#### Enter Insert Mode
+| Key | Action |
+|-----|--------|
+| `i` | Insert before cursor |
+| `a` | Insert after cursor |
+| `I` | Insert at start of line |
+| `A` | Insert at end of line |
+| `o` | Open new line below |
+| `O` | Open new line above |
+
+#### Delete
+| Key | Action |
+|-----|--------|
+| `x` | Delete character under cursor |
+| `dd` | Delete entire line |
+| `dw` | Delete to next word |
+| `d$` | Delete to end of line |
+| `d0` | Delete to start of line |
+| `diw` | Delete inner word |
+| `D` | Delete to end of line (same as `d$`) |
+
+#### Change (delete and enter Insert mode)
+| Key | Action |
+|-----|--------|
+| `cc` | Change entire line |
+| `cw` | Change to next word |
+| `c$` | Change to end of line |
+| `c0` | Change to start of line |
+| `ciw` | Change inner word |
+| `C` | Change to end of line (same as `c$`) |
+
+### Insert Mode
+
+| Key | Action |
+|-----|--------|
+| `Esc` | Return to Normal mode |
+| `Enter` | Execute query |
+| `Ctrl+J` or `Alt+Enter` | Insert newline |
+| `Ctrl+K` | Open autocomplete |
+| `Ctrl+P` | Previous history |
+| `Ctrl+N` | Next history |
+
 ## Configuration
 
 On first launch, a default configuration file is created at `~/.config/mytui/config.toml`. You can customize your prompt, default table format, syntax highlighting theme, and more.

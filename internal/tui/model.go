@@ -478,6 +478,102 @@ func isIdentifierChar(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '.' || r == '`'
 }
 
+// deleteToLineStart deletes text from cursor to start of line (vim d0/c0)
+func (m *Model) deleteToLineStart() {
+	text := m.textarea.Value()
+	lines := strings.Split(text, "\n")
+	currentRow := m.textarea.Line()
+	if currentRow >= len(lines) {
+		return
+	}
+	lineInfo := m.textarea.LineInfo()
+	col := lineInfo.ColumnOffset
+
+	// Delete characters from start to current position
+	for i := 0; i < col; i++ {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	}
+}
+
+// deleteInnerWord deletes the word under cursor (vim diw/ciw)
+func (m *Model) deleteInnerWord() {
+	text := m.textarea.Value()
+	pos := m.cursorPosition()
+
+	if pos >= len(text) {
+		return
+	}
+
+	// Find word boundaries
+	start := pos
+	end := pos
+
+	// Move start backward to find word beginning
+	for start > 0 && isWordChar(rune(text[start-1])) {
+		start--
+	}
+
+	// Move end forward to find word end
+	for end < len(text) && isWordChar(rune(text[end])) {
+		end++
+	}
+
+	if start == end {
+		return
+	}
+
+	// Move cursor to start of word
+	for m.cursorPosition() > start {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	}
+
+	// Delete the word
+	for i := start; i < end; i++ {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	}
+}
+
+func isWordChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+}
+
+// findCharInLine implements vim's f/F motion to find a character on the current line
+func (m *Model) findCharInLine(target rune, forward bool) {
+	text := m.textarea.Value()
+	lines := strings.Split(text, "\n")
+	currentRow := m.textarea.Line()
+	if currentRow >= len(lines) {
+		return
+	}
+	line := lines[currentRow]
+	lineInfo := m.textarea.LineInfo()
+	col := lineInfo.ColumnOffset
+
+	if forward {
+		// Search forward from current position
+		for i := col + 1; i < len(line); i++ {
+			if rune(line[i]) == target {
+				// Move cursor right (i - col) times
+				for j := col; j < i; j++ {
+					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRight})
+				}
+				return
+			}
+		}
+	} else {
+		// Search backward from current position
+		for i := col - 1; i >= 0; i-- {
+			if rune(line[i]) == target {
+				// Move cursor left (col - i) times
+				for j := col; j > i; j-- {
+					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyLeft})
+				}
+				return
+			}
+		}
+	}
+}
+
 func (m *Model) UpdateCursorStyle() {
 	if m.focus != FocusQuery || m.vimState.Mode == vim.NormalMode {
 		m.textarea.Cursor.Style = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC"))
