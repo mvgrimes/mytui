@@ -168,13 +168,17 @@ func calculateTotalWidth(result *db.Result) int {
 }
 
 func formatValue(val interface{}) string {
+	var str string
 	if val == nil {
 		return "NULL"
 	} else if b, ok := val.([]byte); ok {
-		return string(b)
+		str = string(b)
 	} else {
-		return fmt.Sprintf("%v", val)
+		str = fmt.Sprintf("%v", val)
 	}
+	str = strings.ReplaceAll(str, "\r", "\\r")
+	str = strings.ReplaceAll(str, "\n", "\\n")
+	return str
 }
 
 func printTable(result *db.Result, out io.Writer, cfg *config.Config) {
