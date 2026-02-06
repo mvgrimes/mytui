@@ -779,8 +779,10 @@ func (m Model) executeQuery(query string) (Model, tea.Cmd) {
 		m.addResult(result, query, format)
 		m.recalculateHeight()
 		m.textarea.Reset()
-		m.focus = FocusResults
-		m.textarea.Blur()
+		if len(result.Headers) > 0 {
+			m.focus = FocusResults
+			m.textarea.Blur()
+		}
 
 		upperQuery := strings.ToUpper(trimmedQuery)
 		if strings.HasPrefix(upperQuery, "USE") ||
