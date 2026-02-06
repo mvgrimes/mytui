@@ -456,6 +456,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				totalRows = len(res.DbResult.Rows)
 			}
 
+			// Handle gg (go to top)
+			if m.vimPendingKey == "g" && msg.String() == "g" {
+				m.vimPendingKey = ""
+				if totalRows > 0 {
+					res.SelectedRow = 0
+					m.ensureSelectionVisible(res)
+				} else {
+					res.Viewport.GotoTop()
+				}
+				return m, nil
+			}
+			// Clear pending key if it's not being used for gg
+			if m.vimPendingKey == "g" && msg.String() != "g" {
+				m.vimPendingKey = ""
+			}
+
 			switch msg.String() {
 			case "q", "esc":
 				m.focus = FocusQuery
@@ -499,6 +515,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					res.XOffset = maxOffset
 				}
 				return m, nil
+			case "g":
+				// Set pending for gg
+				m.vimPendingKey = "g"
+				return m, nil
 			case "G":
 				// Jump to last row
 				if totalRows > 0 {
@@ -506,6 +526,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.ensureSelectionVisible(res)
 				} else {
 					res.Viewport.GotoBottom()
+				}
+				return m, nil
+			case "ctrl+u":
+				// Move selection up by half page
+				if totalRows > 0 {
+					halfPage := res.Viewport.Height / 2
+					res.SelectedRow -= halfPage
+					if res.SelectedRow < 0 {
+						res.SelectedRow = 0
+					}
+					m.ensureSelectionVisible(res)
+				} else {
+					res.Viewport.HalfViewUp()
+				}
+				return m, nil
+			case "ctrl+d":
+				// Move selection down by half page
+				if totalRows > 0 {
+					halfPage := res.Viewport.Height / 2
+					res.SelectedRow += halfPage
+					if res.SelectedRow >= totalRows {
+						res.SelectedRow = totalRows - 1
+					}
+					m.ensureSelectionVisible(res)
+				} else {
+					res.Viewport.HalfViewDown()
 				}
 				return m, nil
 			case "enter":
@@ -956,9 +1002,9 @@ func (m Model) View() string {
 	qHeader := m.renderQueryHeader(m.focus == FocusQuery)
 
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Margin(0, 1)
-	helpTextStr := "j/k:select Enter:detail y:copy v:edit • d:delete R:rerun • Tab:focus"
+	helpTextStr := "j/k:select · Enter:detail · y:copy · v:edit · d:delete · R:rerun · e:expand · c:collapse · +/-:size · Tab:focus"
 	if m.focus == FocusQuery {
-		helpTextStr = "Ctrl+K: autocomplete • Ctrl+Space: menu • Ctrl+P/N: history • Tab: focus"
+		helpTextStr = "Ctrl+K: autocomplete · Ctrl+Space: menu · Ctrl+P/N: history · Tab: focus"
 	}
 	helpText := helpStyle.Render(helpTextStr)
 
