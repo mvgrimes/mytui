@@ -245,6 +245,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeySpace})
 					consumed = true
 				}
+			case ";":
+				if m.suggestionIndex >= 0 && m.suggestionIndex < len(m.suggestions) {
+					m.applySuggestion()
+					m.showSuggestions = false
+					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{';'}})
+					consumed = true
+				}
 			case "esc":
 				if m.suggestionIndex >= 0 {
 					// First ESC: unselect
