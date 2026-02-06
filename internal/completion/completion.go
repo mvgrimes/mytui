@@ -129,6 +129,18 @@ func (c *Completer) Complete(d Document) []Suggestion {
 		return filterHasPrefix(c.keywords, word, true)
 	}
 
+	// Handle USE statement specially - suggest database names
+	textBefore := d.TextBeforeCursor()
+	upperText := strings.ToUpper(strings.TrimSpace(textBefore))
+	if strings.HasPrefix(upperText, "USE ") || upperText == "USE" {
+		lastWord := getLastWord(d.Text, d.CursorPosition)
+		var schemas []Suggestion
+		for _, schema := range c.cache.SortedSchemas() {
+			schemas = append(schemas, Suggestion{Text: schema, Description: "database"})
+		}
+		return filterHasPrefix(schemas, lastWord, true)
+	}
+
 	parsed, err := parser.Parse(d.Text)
 	if err != nil {
 		// Fallback to simple completion if parse fails
