@@ -133,6 +133,17 @@ mytui -e "SELECT * FROM users LIMIT 10" mydatabase
 | `ciw` | Change inner word |
 | `C` | Change to end of line (same as `c$`) |
 
+#### SQL Shortcuts
+| Key | Action |
+|-----|--------|
+| `gi` | Insert `INSERT INTO () VALUES ()` template |
+| `gs` | Insert `SELECT * FROM` template |
+| `gd` | Insert `DELETE FROM` template |
+| `gc` | Insert `CREATE TABLE` template |
+| `gf` | Jump to fields position (after SELECT or inside INSERT parentheses) |
+| `gt` | Jump to table name position |
+| `gw` | Jump to WHERE clause (inserts if missing) |
+
 ### Insert Mode
 
 | Key | Action |
@@ -143,6 +154,17 @@ mytui -e "SELECT * FROM users LIMIT 10" mydatabase
 | `Ctrl+K` | Open autocomplete |
 | `Ctrl+P` | Previous history |
 | `Ctrl+N` | Next history |
+
+#### SQL Shortcuts (Ctrl+X prefix)
+| Key | Action |
+|-----|--------|
+| `Ctrl+X i` | Insert `INSERT INTO () VALUES ()` template |
+| `Ctrl+X s` | Insert `SELECT * FROM` template |
+| `Ctrl+X d` | Insert `DELETE FROM` template |
+| `Ctrl+X c` | Insert `CREATE TABLE` template |
+| `Ctrl+X f` | Jump to fields position |
+| `Ctrl+X t` | Jump to table name position |
+| `Ctrl+X w` | Jump to WHERE clause (inserts if missing) |
 
 ## Configuration
 

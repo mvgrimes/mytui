@@ -528,6 +528,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
+				// Handle g pending - SQL shortcuts
+				if m.vimPendingKey == "g" {
+					switch keyStr {
+					case "i":
+						m.insertSQLTemplate(sqlTemplateInsert, sqlOffsetInsert)
+						m.vimState.Mode = vim.InsertMode
+						m.vimPendingKey = ""
+						return m, m.textarea.Focus()
+					case "s":
+						m.insertSQLTemplate(sqlTemplateSelect, sqlOffsetSelect)
+						m.vimState.Mode = vim.InsertMode
+						m.vimPendingKey = ""
+						return m, m.textarea.Focus()
+					case "d":
+						m.insertSQLTemplate(sqlTemplateDelete, sqlOffsetDelete)
+						m.vimState.Mode = vim.InsertMode
+						m.vimPendingKey = ""
+						return m, m.textarea.Focus()
+					case "c":
+						m.insertSQLTemplate(sqlTemplateCreate, sqlOffsetCreate)
+						m.vimState.Mode = vim.InsertMode
+						m.vimPendingKey = ""
+						return m, m.textarea.Focus()
+					case "f":
+						m.jumpToFieldsPosition()
+						m.vimPendingKey = ""
+						return m, nil
+					case "t":
+						m.jumpToTablePosition()
+						m.vimPendingKey = ""
+						return m, nil
+					case "w":
+						m.jumpToWherePosition()
+						m.vimPendingKey = ""
+						return m, nil
+					}
+					m.vimPendingKey = ""
+					return m, nil
+				}
+
 				switch keyStr {
 				case "i":
 					if m.vimPendingKey == "c" || m.vimPendingKey == "d" {
@@ -645,15 +685,47 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case "F":
 					m.vimPendingKey = "F"
 					return m, nil
+				case "g":
+					m.vimPendingKey = "g"
+					return m, nil
 				default:
 					m.vimPendingKey = ""
 				}
-				if keyStr != "d" && keyStr != "c" && keyStr != "f" && keyStr != "F" && keyStr != "i" {
+				if keyStr != "d" && keyStr != "c" && keyStr != "f" && keyStr != "F" && keyStr != "i" && keyStr != "g" {
 					m.vimPendingKey = ""
 				}
 				return m, nil
 			} else {
 				// Insert Mode
+
+				// Handle ctrl+x pending - SQL shortcuts in insert mode
+				if m.vimPendingKey == "ctrl+x" {
+					switch msg.String() {
+					case "i":
+						m.insertSQLTemplate(sqlTemplateInsert, sqlOffsetInsert)
+					case "s":
+						m.insertSQLTemplate(sqlTemplateSelect, sqlOffsetSelect)
+					case "d":
+						m.insertSQLTemplate(sqlTemplateDelete, sqlOffsetDelete)
+					case "c":
+						m.insertSQLTemplate(sqlTemplateCreate, sqlOffsetCreate)
+					case "f":
+						m.jumpToFieldsPosition()
+					case "t":
+						m.jumpToTablePosition()
+					case "w":
+						m.jumpToWherePosition()
+					}
+					m.vimPendingKey = ""
+					return m, nil
+				}
+
+				// Set ctrl+x pending state
+				if msg.Type == tea.KeyCtrlX {
+					m.vimPendingKey = "ctrl+x"
+					return m, nil
+				}
+
 				if msg.Type == tea.KeyEsc {
 					m.vimState.Mode = vim.NormalMode
 					return m, nil

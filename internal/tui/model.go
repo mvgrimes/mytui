@@ -32,6 +32,22 @@ const (
 	FocusResults
 )
 
+// SQL templates for shortcuts
+const (
+	sqlTemplateInsert = "INSERT INTO  () VALUES ()"
+	sqlTemplateSelect = "SELECT * FROM "
+	sqlTemplateDelete = "DELETE FROM "
+	sqlTemplateCreate = "CREATE TABLE  (\n)"
+)
+
+// Cursor offsets within templates (position after insertion)
+const (
+	sqlOffsetInsert = 12 // After "INSERT INTO "
+	sqlOffsetSelect = 14 // After "SELECT * FROM "
+	sqlOffsetDelete = 12 // After "DELETE FROM "
+	sqlOffsetCreate = 13 // After "CREATE TABLE "
+)
+
 type Result struct {
 	Query           string
 	Timestamp       time.Time
@@ -535,6 +551,91 @@ func (m *Model) deleteInnerWord() {
 
 func isWordChar(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+}
+
+// insertSQLTemplate inserts an SQL template at the current cursor position
+func (m *Model) insertSQLTemplate(template string, cursorOffset int) {
+	text := m.textarea.Value()
+	pos := m.cursorPosition()
+	newText := text[:pos] + template + text[pos:]
+	m.textarea.SetValue(newText)
+	m.textarea.SetCursor(pos + cursorOffset)
+}
+
+// jumpToFieldsPosition moves cursor to the fields position in SELECT or INSERT
+func (m *Model) jumpToFieldsPosition() {
+	text := m.textarea.Value()
+	upperText := strings.ToUpper(text)
+
+	// For SELECT: position after "SELECT " before "FROM"
+	if idx := strings.Index(upperText, "SELECT "); idx != -1 {
+		fromIdx := strings.Index(upperText[idx:], " FROM")
+		if fromIdx != -1 {
+			m.textarea.SetCursor(idx + fromIdx)
+		} else {
+			m.textarea.SetCursor(idx + 7) // After "SELECT "
+		}
+		return
+	}
+
+	// For INSERT: position inside first ()
+	if idx := strings.Index(upperText, "INSERT INTO "); idx != -1 {
+		if parenIdx := strings.Index(text[idx:], "("); parenIdx != -1 {
+			m.textarea.SetCursor(idx + parenIdx + 1)
+		}
+	}
+}
+
+// jumpToTablePosition moves cursor to the table name position
+func (m *Model) jumpToTablePosition() {
+	text := m.textarea.Value()
+	upperText := strings.ToUpper(text)
+
+	// Keywords followed by table name, check in order
+	patterns := []struct {
+		keyword string
+		offset  int
+	}{
+		{"INSERT INTO ", 12},
+		{"DELETE FROM ", 12},
+		{"UPDATE ", 7},
+		{"CREATE TABLE ", 13},
+		{"FROM ", 5},
+		{"INTO ", 5},
+		{"TABLE ", 6},
+	}
+
+	for _, p := range patterns {
+		if idx := strings.Index(upperText, p.keyword); idx != -1 {
+			m.textarea.SetCursor(idx + p.offset)
+			return
+		}
+	}
+}
+
+// jumpToWherePosition moves cursor to WHERE clause, inserting it if missing
+func (m *Model) jumpToWherePosition() {
+	text := m.textarea.Value()
+	upperText := strings.ToUpper(text)
+
+	// If WHERE exists, position after it
+	if idx := strings.Index(upperText, "WHERE "); idx != -1 {
+		m.textarea.SetCursor(idx + 6)
+		return
+	}
+
+	// Find insertion point (before ORDER BY, GROUP BY, LIMIT, or end)
+	insertPos := len(text)
+	for _, kw := range []string{" ORDER BY", " GROUP BY", " LIMIT", ";"} {
+		if idx := strings.Index(upperText, kw); idx != -1 && idx < insertPos {
+			insertPos = idx
+		}
+	}
+
+	// Insert " WHERE " and position cursor
+	newText := text[:insertPos] + " WHERE " + text[insertPos:]
+	m.textarea.SetValue(newText)
+	m.textarea.SetCursor(insertPos + 7)
 }
 
 // findCharInLine implements vim's f/F motion to find a character on the current line
