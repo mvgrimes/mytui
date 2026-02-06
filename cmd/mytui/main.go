@@ -52,7 +52,7 @@ administration and development.`,
 	rootCmd.Flags().StringP("prompt", "R", "", "Prompt template")
 	rootCmd.Flags().StringP("config", "c", "", "Path to config file")
 	rootCmd.Flags().StringP("execute", "e", "", "Execute a command and quit")
-	rootCmd.Flags().Bool("tui", false, "Use the new TUI interface")
+	rootCmd.Flags().Bool("repl", false, "Use classic REPL interface")
 
 	// Allow database as positional argument
 	rootCmd.Args = cobra.MaximumNArgs(1)
@@ -78,7 +78,7 @@ func runREPL(cmd *cobra.Command, args []string) error {
 	promptFlag, _ := cmd.Flags().GetString("prompt")
 	configPath, _ := cmd.Flags().GetString("config")
 	executeFlag, _ := cmd.Flags().GetString("execute")
-	tuiFlag, _ := cmd.Flags().GetBool("tui")
+	replFlag, _ := cmd.Flags().GetBool("repl")
 
 	// Use positional argument for database if flag is not set
 	if database == "" && len(args) > 0 {
@@ -156,14 +156,14 @@ func runREPL(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Connected! Server version: %s\n", serverVersion)
 	}
 
-	if tuiFlag {
-		p := tea.NewProgram(tui.NewModel(conn, cfg), tea.WithAltScreen())
-		if _, err := p.Run(); err != nil {
-			return fmt.Errorf("error running TUI: %v", err)
-		}
+	if replFlag {
+		repl.RunREPL(conn, cfg)
 		return nil
 	}
 
-	repl.RunREPL(conn, cfg)
+	p := tea.NewProgram(tui.NewModel(conn, cfg), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		return fmt.Errorf("error running TUI: %v", err)
+	}
 	return nil
 }
