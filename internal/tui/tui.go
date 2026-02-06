@@ -101,6 +101,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Handle row detail modal
+		if m.showRowDetail {
+			switch msg.String() {
+			case "q", "esc":
+				m.showRowDetail = false
+			case "j", "down":
+				m.rowDetailViewport.LineDown(1)
+			case "k", "up":
+				m.rowDetailViewport.LineUp(1)
+			case "g":
+				m.rowDetailViewport.GotoTop()
+			case "G":
+				m.rowDetailViewport.GotoBottom()
+			}
+			return m, nil
+		}
+
+		// Handle copy format menu
+		if m.showCopyMenu {
+			switch msg.String() {
+			case "j", "down":
+				if m.copyMenuIndex < 3 {
+					m.copyMenuIndex++
+				}
+			case "k", "up":
+				if m.copyMenuIndex > 0 {
+					m.copyMenuIndex--
+				}
+			case "enter":
+				m.copyRowToClipboard(CopyFormat(m.copyMenuIndex))
+			case "esc":
+				m.showCopyMenu = false
+			}
+			return m, nil
+		}
+
 		if m.showMenu {
 			if m.menuType == MenuSaveFavorite {
 				switch msg.Type {
@@ -413,16 +449,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.focus == FocusResults && m.focusedResult >= 0 {
 			res := m.results[m.focusedResult]
+
+			// Get total data rows (rows from database result)
+			totalRows := 0
+			if res.DbResult != nil {
+				totalRows = len(res.DbResult.Rows)
+			}
+
 			switch msg.String() {
 			case "q", "esc":
 				m.focus = FocusQuery
 				m.focusedResult = -1
 				return m, m.textarea.Focus()
 			case "j", "down":
-				res.Viewport.LineDown(1)
+				// Selection-based navigation for results with rows
+				if totalRows > 0 && res.SelectedRow < totalRows-1 {
+					res.SelectedRow++
+					m.ensureSelectionVisible(res)
+				} else if totalRows == 0 {
+					// Fallback to viewport scroll for text results
+					res.Viewport.LineDown(1)
+				}
 				return m, nil
 			case "k", "up":
-				res.Viewport.LineUp(1)
+				if totalRows > 0 && res.SelectedRow > 0 {
+					res.SelectedRow--
+					m.ensureSelectionVisible(res)
+				} else if totalRows == 0 {
+					res.Viewport.LineUp(1)
+				}
 				return m, nil
 			case "h", "left":
 				res.Viewport.ScrollLeft(5)
@@ -445,7 +500,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case "G":
-				res.Viewport.GotoBottom()
+				// Jump to last row
+				if totalRows > 0 {
+					res.SelectedRow = totalRows - 1
+					m.ensureSelectionVisible(res)
+				} else {
+					res.Viewport.GotoBottom()
+				}
+				return m, nil
+			case "enter":
+				// Open row detail modal
+				if res.SelectedRow >= 0 && res.DbResult != nil && len(res.DbResult.Rows) > 0 {
+					m.openRowDetailModal(res)
+				}
+				return m, nil
+			case "y":
+				// Yank/copy row - show format menu
+				if res.SelectedRow >= 0 && res.DbResult != nil && len(res.DbResult.Rows) > 0 {
+					m.showCopyMenu = true
+					m.copyMenuIndex = 0
+				}
+				return m, nil
+			case "v":
+				// Open row in visual editor
+				if res.SelectedRow >= 0 && res.DbResult != nil && len(res.DbResult.Rows) > 0 {
+					return m, m.openRowInEditor(res)
+				}
 				return m, nil
 			case "e":
 				res.Expanded = true
@@ -876,7 +956,7 @@ func (m Model) View() string {
 	qHeader := m.renderQueryHeader(m.focus == FocusQuery)
 
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Margin(0, 1)
-	helpTextStr := "e:expand c:collapse +/-:size d:delete r:rerun R:refresh • Tab: focus"
+	helpTextStr := "j/k:select Enter:detail y:copy v:edit • d:delete R:rerun • Tab:focus"
 	if m.focus == FocusQuery {
 		helpTextStr = "Ctrl+K: autocomplete • Ctrl+Space: menu • Ctrl+P/N: history • Tab: focus"
 	}
@@ -897,7 +977,17 @@ func (m Model) View() string {
 				resultsView = append(resultsView, header)
 				resultsLines += strings.Count(r.FormattedHeader, "\n") + 1
 			}
-			resultsView = append(resultsView, r.Viewport.View())
+
+			// Apply row highlighting for focused result with database rows
+			viewContent := r.Viewport.View()
+			if focused && r.DbResult != nil && len(r.DbResult.Rows) > 0 && r.SelectedRow >= 0 {
+				// Calculate which line in the viewport corresponds to the selected row
+				viewportSelectedRow := r.SelectedRow - r.Viewport.YOffset
+				if viewportSelectedRow >= 0 && viewportSelectedRow < r.Viewport.Height {
+					viewContent = highlightSelectedRow(viewContent, viewportSelectedRow, m.width)
+				}
+			}
+			resultsView = append(resultsView, viewContent)
 			resultsLines += r.Viewport.Height
 		}
 	}
@@ -909,43 +999,36 @@ func (m Model) View() string {
 		helpText,
 	)
 
-	if m.showSuggestions {
-		// Overlay suggestions near the text cursor
-		bg := view
-		fg := m.renderSuggestions()
+	// Modal overlays take priority (checked first)
+	// Using overlay.Composite with proper centering and background padding
+	if m.showRowDetail {
+		fg := m.renderRowDetailModal()
+		bg := ensureBackgroundSize(view, fg, m.width, m.height)
 		fgWidth, fgHeight := lipgloss.Size(fg)
-		xOff, yOff := m.computeSuggestionOffsets(resultsLines, fgHeight)
+		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
+	}
 
-		// Ensure background is tall enough for suggestions placed below cursor
-		bgWidth, bgHeight := lipgloss.Size(bg)
-		requiredHeight := yOff + fgHeight
-		if requiredHeight > bgHeight {
-			padding := strings.Repeat("\n", requiredHeight-bgHeight)
-			bg = bg + padding
-		}
-
-		// Ensure background is wide enough for suggestions
-		requiredWidth := xOff + fgWidth
-		if requiredWidth > bgWidth {
-			// Pad each line to required width
-			lines := strings.Split(bg, "\n")
-			for i, line := range lines {
-				lineWidth := lipgloss.Width(line)
-				if lineWidth < requiredWidth {
-					lines[i] = line + strings.Repeat(" ", requiredWidth-lineWidth)
-				}
-			}
-			bg = strings.Join(lines, "\n")
-		}
-
-		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, xOff, yOff)
+	if m.showCopyMenu {
+		fg := m.renderCopyMenu()
+		bg := ensureBackgroundSize(view, fg, m.width, m.height)
+		fgWidth, fgHeight := lipgloss.Size(fg)
+		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
 	}
 
 	if m.showMenu {
-		// Center the command menu as a modal over the existing view
-		bg := view
 		fg := m.renderMenu()
-		return overlay.Composite(fg, bg, overlay.Center, overlay.Center, 0, 0)
+		bg := ensureBackgroundSize(view, fg, m.width, m.height)
+		fgWidth, fgHeight := lipgloss.Size(fg)
+		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
+	}
+
+	if m.showSuggestions {
+		// Overlay suggestions near the text cursor
+		fg := m.renderSuggestions()
+		bg := ensureBackgroundSize(view, fg, m.width, m.height)
+		_, fgHeight := lipgloss.Size(fg)
+		xOff, yOff := m.computeSuggestionOffsets(resultsLines, fgHeight)
+		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, xOff, yOff)
 	}
 
 	return view

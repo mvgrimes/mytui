@@ -61,6 +61,7 @@ type Result struct {
 	Viewport        viewport.Model
 	Format          formatter.Format
 	XOffset         int // Track horizontal scroll offset for pinned header
+	SelectedRow     int // -1 = no selection, 0 = first data row
 }
 
 type MenuType int
@@ -106,6 +107,14 @@ type Model struct {
 	suggestionIndex int
 
 	lastError *parser.ParseError
+
+	// Row detail modal state
+	showRowDetail     bool
+	rowDetailViewport viewport.Model
+
+	// Copy format menu state
+	showCopyMenu  bool
+	copyMenuIndex int
 }
 
 type MenuCommand struct {
@@ -329,6 +338,7 @@ func (m *Model) addResult(result *db.Result, query string, format formatter.Form
 		FormattedData:   data,
 		Viewport:        viewport.New(m.width, 7), // Reduced height to account for pinned header
 		Format:          format,
+		SelectedRow:     0, // Start with first data row selected
 	}
 	r.Viewport.SetContent(data)
 	m.results = append(m.results, r)
