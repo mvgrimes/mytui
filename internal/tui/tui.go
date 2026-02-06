@@ -427,6 +427,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "l", "right":
 				res.Viewport.ScrollRight(5)
 				res.XOffset += 5
+				// Clamp XOffset to not exceed content width minus viewport width
+				contentWidth := maxContentWidth(res.Formatted)
+				maxOffset := contentWidth - m.width
+				if maxOffset < 0 {
+					maxOffset = 0
+				}
+				if res.XOffset > maxOffset {
+					res.XOffset = maxOffset
+				}
 				return m, nil
 			case "G":
 				res.Viewport.GotoBottom()

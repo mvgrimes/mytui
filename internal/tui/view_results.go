@@ -38,6 +38,19 @@ func (m Model) renderResultHeader(r *Result, focused bool) string {
 	return style.Width(m.width).Render(header)
 }
 
+// maxContentWidth returns the maximum line width in a multi-line string.
+// Uses ANSI-aware width calculation to properly handle color codes.
+func maxContentWidth(s string) int {
+	maxWidth := 0
+	for _, line := range strings.Split(s, "\n") {
+		w := ansi.StringWidth(line)
+		if w > maxWidth {
+			maxWidth = w
+		}
+	}
+	return maxWidth
+}
+
 // applyHorizontalOffset shifts a multi-line string horizontally by the given offset.
 // This is used to sync the pinned header with the viewport's horizontal scroll.
 // Uses ANSI-aware truncation to properly handle color codes.
