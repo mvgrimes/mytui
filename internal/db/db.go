@@ -336,5 +336,5 @@ func (c *Connection) GetColumns(table string) ([]string, error) {
 
 func isSelectQuery(query string) bool {
 	trimmed := strings.TrimSpace(strings.ToUpper(query))
-	return strings.HasPrefix(trimmed, "SELECT") || strings.HasPrefix(trimmed, "SHOW") || strings.HasPrefix(trimmed, "DESCRIBE")
+	return strings.HasPrefix(trimmed, "SELECT") || strings.HasPrefix(trimmed, "SHOW") || strings.HasPrefix(trimmed, "DESCRIBE") || strings.HasPrefix(trimmed, "DESC")
 }

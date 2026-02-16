@@ -864,6 +864,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					query := m.textarea.Value()
 					if strings.TrimSpace(query) != "" {
+						m.showSuggestions = false
 						return m.executeQuery(query)
 					}
 				}
@@ -1004,7 +1005,11 @@ func (m Model) View() string {
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Margin(0, 1)
 	helpTextStr := "j/k:select · Enter:detail · y:copy · v:edit · d:delete · R:rerun · e:expand · c:collapse · +/-:size · Tab:focus"
 	if m.focus == FocusQuery {
-		helpTextStr = "Ctrl+K: autocomplete · Ctrl+Space: menu · Ctrl+P/N: history · Tab: focus"
+		if m.vimState.Mode == vim.NormalMode {
+			helpTextStr = "gi:INSERT · gs:SELECT · gd:DELETE · gc:CREATE · gf:fields · gt:table · gw:where · Tab:focus"
+		} else {
+			helpTextStr = "Ctrl+K:autocomplete · Ctrl+Space:menu · Ctrl+P/N:history · Ctrl+X s/i/d/c:SQL · Ctrl+X f/t/w:jump · Tab:focus"
+		}
 	}
 	helpText := helpStyle.Render(helpTextStr)
 
