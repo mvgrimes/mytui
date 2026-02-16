@@ -450,6 +450,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.focus == FocusResults && m.focusedResult >= 0 {
 			res := m.results[m.focusedResult]
 
+			// Handle search input mode
+			if res.SearchActive {
+				switch msg.Type {
+				case tea.KeyRunes:
+					res.SearchInput += string(msg.Runes)
+					if match := findMatchingRow(res, res.SearchInput, 0, true); match >= 0 {
+						res.SelectedRow = match
+						m.ensureSelectionVisible(res)
+					}
+				case tea.KeyBackspace:
+					if len(res.SearchInput) > 0 {
+						res.SearchInput = res.SearchInput[:len(res.SearchInput)-1]
+					}
+					if res.SearchInput != "" {
+						if match := findMatchingRow(res, res.SearchInput, 0, true); match >= 0 {
+							res.SelectedRow = match
+							m.ensureSelectionVisible(res)
+						}
+					}
+				case tea.KeyEnter:
+					res.SearchQuery = res.SearchInput
+					res.SearchActive = false
+				case tea.KeyEsc:
+					res.SelectedRow = res.PreSearchRow
+					res.SearchInput = ""
+					res.SearchActive = false
+					m.ensureSelectionVisible(res)
+				}
+				return m, nil
+			}
+
 			// Get total data rows (rows from database result)
 			totalRows := 0
 			if res.DbResult != nil {
@@ -473,6 +504,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			switch msg.String() {
+			case "/":
+				if totalRows > 0 {
+					res.SearchActive = true
+					res.SearchInput = ""
+					res.PreSearchRow = res.SelectedRow
+				}
+				return m, nil
+			case "n":
+				if res.SearchQuery != "" && totalRows > 0 {
+					if match := findMatchingRow(res, res.SearchQuery, res.SelectedRow+1, true); match >= 0 {
+						res.SelectedRow = match
+						m.ensureSelectionVisible(res)
+					}
+				}
+				return m, nil
+			case "N":
+				if res.SearchQuery != "" && totalRows > 0 {
+					start := res.SelectedRow - 1
+					if start < 0 {
+						start = totalRows - 1
+					}
+					if match := findMatchingRow(res, res.SearchQuery, start, false); match >= 0 {
+						res.SelectedRow = match
+						m.ensureSelectionVisible(res)
+					}
+				}
+				return m, nil
 			case "q", "esc":
 				m.focus = FocusQuery
 				m.focusedResult = -1
@@ -1003,7 +1061,7 @@ func (m Model) View() string {
 	qHeader := m.renderQueryHeader(m.focus == FocusQuery)
 
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Margin(0, 1)
-	helpTextStr := "j/k:select · Enter:detail · y:copy · v:edit · d:delete · R:rerun · e:expand · c:collapse · +/-:size · Tab:focus"
+	helpTextStr := "j/k:select · /:search · n/N:next/prev · Enter:detail · y:copy · v:edit · d:delete · R:rerun · +/-:size · Tab:focus"
 	if m.focus == FocusQuery {
 		if m.vimState.Mode == vim.NormalMode {
 			helpTextStr = "gi:INSERT · gs:SELECT · gd:DELETE · gc:CREATE · gf:fields · gt:table · gw:where · Tab:focus"
@@ -1036,6 +1094,14 @@ func (m Model) View() string {
 				viewportSelectedRow := r.SelectedRow - r.Viewport.YOffset
 				if viewportSelectedRow >= 0 && viewportSelectedRow < r.Viewport.Height {
 					viewContent = highlightSelectedRow(viewContent, viewportSelectedRow, m.width)
+				}
+			}
+			if focused && r.SearchActive {
+				// Replace last line of viewport with search prompt
+				vcLines := strings.Split(viewContent, "\n")
+				if len(vcLines) > 1 {
+					vcLines[len(vcLines)-1] = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("/ " + r.SearchInput + "▏")
+					viewContent = strings.Join(vcLines, "\n")
 				}
 			}
 			resultsView = append(resultsView, viewContent)

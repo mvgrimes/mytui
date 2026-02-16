@@ -62,6 +62,10 @@ type Result struct {
 	Format          formatter.Format
 	XOffset         int // Track horizontal scroll offset for pinned header
 	SelectedRow     int // -1 = no selection, 0 = first data row
+	SearchActive    bool   // search prompt is open
+	SearchQuery     string // last accepted search term (for n/N)
+	SearchInput     string // text being typed in prompt
+	PreSearchRow    int    // SelectedRow before search started (for Esc restore)
 }
 
 type MenuType int
