@@ -245,6 +245,17 @@ func getCompletionTypes(nw *parseutil.NodeWalker) *CompletionContext {
 		} else {
 			t = []completionType{CompletionTypeTable, CompletionTypeSchema}
 		}
+	case syntaxPos == parseutil.JoinClause:
+		if nw.CurNodeIs(memberIdentifierMatcher) {
+			mi := nw.CurNodeTopMatched(memberIdentifierMatcher).(*ast.MemberIdentifier)
+			t = []completionType{CompletionTypeTable}
+			p = &completionParent{
+				Type: ParentTypeSchema,
+				Name: mi.ParentTok.NoQuoteString(),
+			}
+		} else {
+			t = []completionType{CompletionTypeTable, CompletionTypeSchema}
+		}
 	case syntaxPos == parseutil.WhereCondition:
 		t = []completionType{CompletionTypeColumn, CompletionTypeFunction}
 	default:

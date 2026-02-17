@@ -288,6 +288,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{';'}})
 					consumed = true
 				}
+			case ",":
+				if m.suggestionIndex >= 0 && m.suggestionIndex < len(m.suggestions) {
+					m.applySuggestion()
+					m.showSuggestions = false
+					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}})
+					consumed = true
+				}
 			case "esc":
 				if m.suggestionIndex >= 0 {
 					// First ESC: unselect
@@ -573,6 +580,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					res.XOffset = maxOffset
 				}
 				return m, nil
+			case "0", "^":
+				// Scroll all the way to the left
+				if res.XOffset > 0 {
+					res.Viewport.ScrollLeft(res.XOffset)
+					res.XOffset = 0
+				}
+				return m, nil
+			case "$":
+				// Scroll all the way to the right
+				contentWidth := maxContentWidth(res.Formatted)
+				maxOffset := contentWidth - m.width
+				if maxOffset < 0 {
+					maxOffset = 0
+				}
+				if res.XOffset < maxOffset {
+					res.Viewport.ScrollRight(maxOffset - res.XOffset)
+					res.XOffset = maxOffset
+				}
+				return m, nil
+			case "w":
+				// Scroll right by one column
+				colOffset := nextColumnBoundary(res.FormattedHeader, res.XOffset, true)
+				delta := colOffset - res.XOffset
+				if delta > 0 {
+					res.Viewport.ScrollRight(delta)
+					res.XOffset = colOffset
+				}
+				return m, nil
+			case "b":
+				// Scroll left by one column
+				colOffset := nextColumnBoundary(res.FormattedHeader, res.XOffset, false)
+				delta := res.XOffset - colOffset
+				if delta > 0 {
+					res.Viewport.ScrollLeft(delta)
+					res.XOffset = colOffset
+				}
+				return m, nil
 			case "g":
 				// Set pending for gg
 				m.vimPendingKey = "g"
@@ -609,6 +653,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.ensureSelectionVisible(res)
 				} else {
+					res.Viewport.HalfViewDown()
+				}
+				return m, nil
+			case "pgup":
+				if totalRows > 0 {
+					res.SelectedRow -= res.Viewport.Height
+					if res.SelectedRow < 0 {
+						res.SelectedRow = 0
+					}
+					m.ensureSelectionVisible(res)
+				} else {
+					res.Viewport.HalfViewUp()
+					res.Viewport.HalfViewUp()
+				}
+				return m, nil
+			case "pgdown":
+				if totalRows > 0 {
+					res.SelectedRow += res.Viewport.Height
+					if res.SelectedRow >= totalRows {
+						res.SelectedRow = totalRows - 1
+					}
+					m.ensureSelectionVisible(res)
+				} else {
+					res.Viewport.HalfViewDown()
 					res.Viewport.HalfViewDown()
 				}
 				return m, nil
@@ -691,7 +759,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.vimPendingKey == "f" || m.vimPendingKey == "F" {
 					if len(keyStr) == 1 {
 						targetChar := rune(keyStr[0])
-						m.findCharInLine(targetChar, m.vimPendingKey == "f")
+						forward := m.vimPendingKey == "f"
+						m.findCharInLine(targetChar, forward)
+						m.lastFindChar = targetChar
+						m.lastFindForward = forward
+					}
+					m.vimPendingKey = ""
+					return m, nil
+				}
+
+				// Handle r pending - replace single character
+				if m.vimPendingKey == "r" {
+					if len(keyStr) == 1 {
+						text := m.textarea.Value()
+						pos := m.cursorPosition()
+						if pos < len(text) {
+							newText := text[:pos] + keyStr + text[pos+1:]
+							m.textarea.SetValue(newText)
+							m.textarea.SetCursor(pos)
+						}
 					}
 					m.vimPendingKey = ""
 					return m, nil
@@ -863,6 +949,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				case "x":
 					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
+				case "r":
+					m.vimPendingKey = "r"
+					return m, nil
+				case ";":
+					if m.lastFindChar != 0 {
+						m.findCharInLine(m.lastFindChar, m.lastFindForward)
+					}
+				case "u":
+					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlZ})
 				case "f":
 					m.vimPendingKey = "f"
 					return m, nil
@@ -875,7 +970,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				default:
 					m.vimPendingKey = ""
 				}
-				if keyStr != "d" && keyStr != "c" && keyStr != "f" && keyStr != "F" && keyStr != "i" && keyStr != "g" {
+				if keyStr != "d" && keyStr != "c" && keyStr != "f" && keyStr != "F" && keyStr != "i" && keyStr != "g" && keyStr != "r" {
 					m.vimPendingKey = ""
 				}
 				return m, nil
@@ -904,9 +999,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
+				// Handle jk -> escape in insert mode
+				if m.vimPendingKey == "insert-j" {
+					m.vimPendingKey = ""
+					if msg.String() == "k" {
+						m.vimState.Mode = vim.NormalMode
+						return m, nil
+					}
+					// Not k, so insert the pending j and continue processing current key
+					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+					// Fall through to process current key normally
+				}
+
 				// Set ctrl+x pending state
 				if msg.Type == tea.KeyCtrlX {
 					m.vimPendingKey = "ctrl+x"
+					return m, nil
+				}
+
+				if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 'j' {
+					m.vimPendingKey = "insert-j"
 					return m, nil
 				}
 

@@ -112,6 +112,10 @@ type Model struct {
 
 	lastError *parser.ParseError
 
+	// Vim find repeat state
+	lastFindChar    rune
+	lastFindForward bool
+
 	// Row detail modal state
 	showRowDetail     bool
 	rowDetailViewport viewport.Model
