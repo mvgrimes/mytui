@@ -742,7 +742,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					res.Formatted = formatter.FormatResult(newResult, res.Format, m.config)
 					res.FormattedHeader, res.FormattedData = splitTableHeaderAndData(res.Formatted, res.Format)
 					res.Viewport.SetContent(res.FormattedData)
-					res.XOffset = 0
+					if res.XOffset > 0 {
+						res.Viewport.ScrollLeft(res.XOffset)
+						res.XOffset = 0
+					}
 					res.Viewport.GotoTop()
 					res.Timestamp = time.Now()
 					res.Duration = newResult.Duration
