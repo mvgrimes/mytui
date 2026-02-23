@@ -3,7 +3,7 @@ VERSION  := `perl -nE'm{version\s*=\s*"(\d+\.\d+.\d+)"} && print $1' ./cmd/mytui
 
 build:
   echo "Building verions {{VERSION}} of {{APP}}"
-  go build -o mytui cmd/mytui/main.go
+  go build -o {{APP}} cmd/mytui/main.go
 
 lint:
   go vet ./... || true

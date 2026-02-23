@@ -11,6 +11,7 @@ tmp/
 .DS_Store
 /docs/ref/
 /trees/
+.tickets/
 
 # Editor
 Session.vim
