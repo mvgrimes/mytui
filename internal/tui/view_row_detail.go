@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/mvgrimes/mytui/internal/formatter"
 )
 
 // ensureBackgroundSize pads the background to ensure it's large enough for the overlay
@@ -67,6 +69,8 @@ const (
 	CopyFormatTSV
 	CopyFormatJSON
 	CopyFormatVertical
+	CopyFormatASCIITable
+	CopyFormatUnicodeTable
 )
 
 // editorFinishedMsg is sent when the external editor closes
@@ -198,10 +202,12 @@ func (m Model) renderCopyMenu() string {
 	title := copyMenuTitleStyle.Render("Copy Row As")
 
 	options := []string{
-		"CSV   - Comma-separated values",
-		"TSV   - Tab-separated values",
-		"JSON  - JSON object",
-		"Vertical - Column: value format",
+		"CSV          - Comma-separated values",
+		"TSV          - Tab-separated values",
+		"JSON         - JSON object",
+		"Vertical     - Column: value format",
+		"ASCII Table  - Full result as ASCII table",
+		"Unicode Table - Full result as unicode table",
 	}
 
 	var items []string
@@ -250,6 +256,14 @@ func (m *Model) copyRowToClipboard(format CopyFormat) {
 		content = formatRowJSON(headers, row)
 	case CopyFormatVertical:
 		content = formatRowVerticalText(headers, row)
+	case CopyFormatASCIITable:
+		var buf bytes.Buffer
+		formatter.RenderResult(res.DbResult, &buf, formatter.FormatTable, m.config)
+		content = buf.String()
+	case CopyFormatUnicodeTable:
+		var buf bytes.Buffer
+		formatter.RenderResult(res.DbResult, &buf, formatter.FormatUnicode, m.config)
+		content = buf.String()
 	}
 
 	clipboard.WriteAll(content)
@@ -271,6 +285,10 @@ func formatName(f CopyFormat) string {
 		return "JSON"
 	case CopyFormatVertical:
 		return "Vertical"
+	case CopyFormatASCIITable:
+		return "ASCII Table"
+	case CopyFormatUnicodeTable:
+		return "Unicode Table"
 	}
 	return "Unknown"
 }

@@ -122,7 +122,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showCopyMenu {
 			switch msg.String() {
 			case "j", "down":
-				if m.copyMenuIndex < 3 {
+				if m.copyMenuIndex < 5 {
 					m.copyMenuIndex++
 				}
 			case "k", "up":
