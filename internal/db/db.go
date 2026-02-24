@@ -1,12 +1,13 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	mysql "github.com/go-sql-driver/mysql"
 )
 
 type Config struct {
@@ -24,19 +25,43 @@ type Config struct {
 }
 
 type Connection struct {
-	db     *sql.DB
-	Config Config
+	db              *sql.DB
+	Config          Config
+	currentDatabase string // tracks the last successfully USEd database for reconnection
 }
 
 func NewConnection(config Config) (*Connection, error) {
-	dsn := buildDSN(config)
-	db, err := sql.Open("mysql", dsn)
+	c := &Connection{
+		Config:          config,
+		currentDatabase: config.Database,
+	}
+
+	mysqlCfg, err := mysql.ParseDSN(buildDSN(config))
+	if err != nil {
+		return nil, err
+	}
+
+	// BeforeConnect is called each time database/sql opens a new underlying
+	// connection (including transparent reconnections). By setting DBName here
+	// we ensure the correct database is selected during the MySQL handshake,
+	// so session state survives reconnects after a USE db; statement.
+	if err := mysqlCfg.Apply(mysql.BeforeConnect(func(ctx context.Context, driverCfg *mysql.Config) error {
+		if c.currentDatabase != "" {
+			driverCfg.DBName = c.currentDatabase
+		}
+		return nil
+	})); err != nil {
+		return nil, err
+	}
+
+	connector, err := mysql.NewConnector(mysqlCfg)
 	if err != nil {
 		return nil, err
 	}
 
 	// Use a single persistent connection so session state (e.g., USE schema)
 	// applies consistently to subsequent queries.
+	db := sql.OpenDB(connector)
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
@@ -44,7 +69,8 @@ func NewConnection(config Config) (*Connection, error) {
 		return nil, err
 	}
 
-	return &Connection{db: db, Config: config}, nil
+	c.db = db
+	return c, nil
 }
 
 func buildDSN(config Config) string {
@@ -151,6 +177,12 @@ func (c *Connection) ExecuteQuery(query string) (*Result, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		// Track USE db; so the correct database is restored on reconnect.
+		if dbName := parseUseDatabase(query); dbName != "" {
+			c.currentDatabase = dbName
+		}
+
 		affected, _ := result.RowsAffected()
 		duration := time.Since(start)
 		return &Result{
@@ -337,4 +369,26 @@ func (c *Connection) GetColumns(table string) ([]string, error) {
 func isSelectQuery(query string) bool {
 	trimmed := strings.TrimSpace(strings.ToUpper(query))
 	return strings.HasPrefix(trimmed, "SELECT") || strings.HasPrefix(trimmed, "SHOW") || strings.HasPrefix(trimmed, "DESCRIBE") || strings.HasPrefix(trimmed, "DESC")
+}
+
+// parseUseDatabase extracts the database name from a USE statement.
+// Returns empty string if the query is not a USE statement.
+func parseUseDatabase(query string) string {
+	trimmed := strings.TrimSpace(query)
+	trimmed = strings.TrimSuffix(trimmed, ";")
+	trimmed = strings.TrimSpace(trimmed)
+	if len(trimmed) < 4 {
+		return ""
+	}
+	upper := strings.ToUpper(trimmed)
+	if !strings.HasPrefix(upper, "USE") {
+		return ""
+	}
+	rest := strings.TrimSpace(trimmed[3:])
+	if rest == "" {
+		return ""
+	}
+	// Strip optional backtick quoting
+	dbName := strings.Trim(rest, "`")
+	return strings.TrimSpace(dbName)
 }
