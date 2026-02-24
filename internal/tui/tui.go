@@ -131,6 +131,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case "enter":
 				m.copyRowToClipboard(CopyFormat(m.copyMenuIndex))
+				m.focus = FocusQuery
+				m.UpdateCursorStyle()
+				return m, m.textarea.Focus()
 			case "esc":
 				m.showCopyMenu = false
 			}
