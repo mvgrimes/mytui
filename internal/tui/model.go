@@ -123,6 +123,9 @@ type Model struct {
 	// Copy format menu state
 	showCopyMenu  bool
 	copyMenuIndex int
+
+	// Results list vertical scroll offset (lines scrolled off the top)
+	resultsScrollOffset int
 }
 
 type MenuCommand struct {
@@ -355,6 +358,7 @@ func (m *Model) addResult(result *db.Result, query string, format formatter.Form
 		m.results = m.results[1:]
 		m.focusedResult--
 	}
+	m.scrollResultsToBottom()
 }
 
 func (m *Model) addResultFromText(text string, query string) {
@@ -373,6 +377,7 @@ func (m *Model) addResultFromText(text string, query string) {
 		m.results = m.results[1:]
 		m.focusedResult--
 	}
+	m.scrollResultsToBottom()
 }
 
 // splitTableHeaderAndData splits a formatted table into header (first 3 lines) and data portions.
@@ -395,6 +400,69 @@ func splitTableHeaderAndData(formatted string, format formatter.Format) (header,
 	// Data is the rest (data rows + bottom border)
 	data = strings.Join(lines[3:], "\n")
 	return header, data
+}
+
+// computeAvailableHeight returns the number of lines available for the results list.
+func (m Model) computeAvailableHeight() int {
+	queryAreaHeight := len(strings.Split(m.textarea.Value(), "\n"))
+	if queryAreaHeight < 3 {
+		queryAreaHeight = 3
+	}
+	if m.textarea.Value() == "" {
+		queryAreaHeight = len(strings.Split(m.textarea.Placeholder, "\n"))
+		if queryAreaHeight < 3 {
+			queryAreaHeight = 3
+		}
+	}
+	// overhead: 1 (qHeader) + queryAreaHeight + 1 (helpText) + 1 (statusLine)
+	overhead := 3 + queryAreaHeight
+	available := m.height - overhead
+	if available < 0 {
+		return 0
+	}
+	return available
+}
+
+// totalResultsHeight returns the total number of rendered lines across all results.
+func (m Model) totalResultsHeight() int {
+	total := 0
+	for _, r := range m.results {
+		total++ // result header line
+		if r.Expanded {
+			if r.FormattedHeader != "" {
+				total += strings.Count(r.FormattedHeader, "\n") + 1
+			}
+			total += r.Viewport.Height
+		}
+	}
+	return total
+}
+
+// scrollResultsToBottom adjusts resultsScrollOffset so the newest result is visible.
+func (m *Model) scrollResultsToBottom() {
+	total := m.totalResultsHeight()
+	available := m.computeAvailableHeight()
+	if total > available {
+		m.resultsScrollOffset = total - available
+	} else {
+		m.resultsScrollOffset = 0
+	}
+}
+
+// clampResultsScrollOffset ensures resultsScrollOffset stays within valid bounds.
+func (m *Model) clampResultsScrollOffset() {
+	total := m.totalResultsHeight()
+	available := m.computeAvailableHeight()
+	maxOffset := total - available
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.resultsScrollOffset > maxOffset {
+		m.resultsScrollOffset = maxOffset
+	}
+	if m.resultsScrollOffset < 0 {
+		m.resultsScrollOffset = 0
+	}
 }
 
 func (m *Model) ExecuteQueryWithFormat(query string, format formatter.Format) {

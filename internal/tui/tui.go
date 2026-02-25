@@ -47,28 +47,6 @@ func (m *Model) saveToHistory(line string) {
 }
 
 func (m *Model) recalculateHeight() {
-	queryAreaHeight := len(strings.Split(m.textarea.Value(), "\n"))
-	if queryAreaHeight < 3 {
-		queryAreaHeight = 3
-	}
-	if m.textarea.Value() == "" {
-		queryAreaHeight = len(strings.Split(m.textarea.Placeholder, "\n"))
-		if queryAreaHeight < 3 {
-			queryAreaHeight = 3
-		}
-	}
-
-	// 1 (qHeader) + queryAreaHeight + 1 (helpText) + 1 (statusLine)
-	overhead := 3 + queryAreaHeight
-	availableHeight := m.height - overhead
-	if availableHeight < 0 {
-		availableHeight = 0
-	}
-
-	if len(m.results) == 0 {
-		return
-	}
-
 	// Give each result its needed space, up to its DisplaySize
 	for _, r := range m.results {
 		r.Viewport.Width = m.width
@@ -87,6 +65,53 @@ func (m *Model) recalculateHeight() {
 		} else {
 			r.Viewport.Height = 0
 		}
+	}
+	m.clampResultsScrollOffset()
+}
+
+// ensureFocusedResultVisible adjusts resultsScrollOffset so the focused result is visible.
+func (m *Model) ensureFocusedResultVisible() {
+	if m.focusedResult < 0 || m.focusedResult >= len(m.results) {
+		return
+	}
+
+	// Compute the top y-position of the focused result in the full results rendering.
+	top := 0
+	for i, r := range m.results {
+		if i == m.focusedResult {
+			break
+		}
+		top++ // result header line
+		if r.Expanded {
+			if r.FormattedHeader != "" {
+				top += strings.Count(r.FormattedHeader, "\n") + 1
+			}
+			top += r.Viewport.Height
+		}
+	}
+
+	r := m.results[m.focusedResult]
+	height := 1 // result header line
+	if r.Expanded {
+		if r.FormattedHeader != "" {
+			height += strings.Count(r.FormattedHeader, "\n") + 1
+		}
+		height += r.Viewport.Height
+	}
+	bottom := top + height
+
+	available := m.computeAvailableHeight()
+
+	// Scroll up if result is above the visible area.
+	if top < m.resultsScrollOffset {
+		m.resultsScrollOffset = top
+	}
+	// Scroll down if result extends below the visible area.
+	if bottom > m.resultsScrollOffset+available {
+		m.resultsScrollOffset = bottom - available
+	}
+	if m.resultsScrollOffset < 0 {
+		m.resultsScrollOffset = 0
 	}
 }
 
@@ -381,11 +406,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focus = FocusResults
 					m.focusedResult = len(m.results) - 1
 					m.textarea.Blur()
+					m.ensureFocusedResultVisible()
 				}
 				return m, nil
 			} else {
 				if m.focusedResult > 0 {
 					m.focusedResult--
+					m.ensureFocusedResultVisible()
 				} else {
 					m.focus = FocusQuery
 					m.focusedResult = -1
@@ -400,11 +427,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focus = FocusResults
 					m.focusedResult = 0
 					m.textarea.Blur()
+					m.ensureFocusedResultVisible()
 				}
 				return m, nil
 			} else {
 				if m.focusedResult < len(m.results)-1 {
 					m.focusedResult++
+					m.ensureFocusedResultVisible()
 				} else {
 					m.focus = FocusQuery
 					m.focusedResult = -1
@@ -1192,17 +1221,14 @@ func (m Model) View() string {
 	queryView := m.renderQueryArea()
 
 	var resultsView []string
-	resultsLines := 0
 	for i, r := range m.results {
 		focused := (m.focus == FocusResults && m.focusedResult == i)
 		resultsView = append(resultsView, m.renderResultHeader(r, focused))
-		resultsLines += 1
 		if r.Expanded {
 			// Render pinned header if available (for table formats)
 			if r.FormattedHeader != "" {
 				header := applyHorizontalOffset(r.FormattedHeader, r.XOffset, m.width)
 				resultsView = append(resultsView, header)
-				resultsLines += strings.Count(r.FormattedHeader, "\n") + 1
 			}
 
 			// Apply row highlighting for focused result with database rows
@@ -1223,19 +1249,39 @@ func (m Model) View() string {
 				}
 			}
 			resultsView = append(resultsView, viewContent)
-			resultsLines += r.Viewport.Height
+		}
+	}
+
+	// Apply the results scroll offset: slice the full results rendering to the
+	// available height window, so the view is always bounded to m.height lines.
+	availableHeight := m.computeAvailableHeight()
+	visibleResultsStr := ""
+	if len(resultsView) > 0 {
+		fullResultsStr := strings.Join(resultsView, "\n")
+		allResultLines := strings.Split(fullResultsStr, "\n")
+		scrollOff := m.resultsScrollOffset
+		if scrollOff > len(allResultLines) {
+			scrollOff = len(allResultLines)
+		}
+		end := scrollOff + availableHeight
+		if end > len(allResultLines) {
+			end = len(allResultLines)
+		}
+		if scrollOff < end {
+			visibleResultsStr = strings.Join(allResultLines[scrollOff:end], "\n")
 		}
 	}
 
 	view := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinVertical(lipgloss.Left, resultsView...),
+		visibleResultsStr,
 		qHeader,
 		queryView,
 		helpText,
 	)
 
-	// Modal overlays take priority (checked first)
-	// Using overlay.Composite with proper centering and background padding
+	// Modal overlays take priority (checked first).
+	// The view is now bounded to m.height lines, so m.height/2 correctly
+	// centres the modal on the visible screen.
 	if m.showRowDetail {
 		fg := m.renderRowDetailModal()
 		bg := ensureBackgroundSize(view, fg, m.width, m.height)
@@ -1258,11 +1304,17 @@ func (m Model) View() string {
 	}
 
 	if m.showSuggestions {
-		// Overlay suggestions near the text cursor
+		// Overlay suggestions near the text cursor.
+		// Use the number of VISIBLE result lines so the suggestion popup is
+		// positioned relative to what's actually on screen.
+		visibleResultLines := 0
+		if visibleResultsStr != "" {
+			visibleResultLines = strings.Count(visibleResultsStr, "\n") + 1
+		}
 		fg := m.renderSuggestions()
 		bg := ensureBackgroundSize(view, fg, m.width, m.height)
 		_, fgHeight := lipgloss.Size(fg)
-		xOff, yOff := m.computeSuggestionOffsets(resultsLines, fgHeight)
+		xOff, yOff := m.computeSuggestionOffsets(visibleResultLines, fgHeight)
 		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, xOff, yOff)
 	}
 
