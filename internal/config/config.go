@@ -21,8 +21,8 @@ type Config struct {
 	FavoriteQueries    map[string]string `mapstructure:"favorite_queries"`
 	AutoVerticalOutput bool              `mapstructure:"auto_vertical_output"`
 	MultiLine          bool              `mapstructure:"multi_line"`
-	MaxResults     int               `mapstructure:"max_results"`
-	ColumnMaxWidth int               `mapstructure:"column_max_width"`
+	MaxResults         int               `mapstructure:"max_results"`
+	ColumnMaxWidth     int               `mapstructure:"column_max_width"`
 }
 
 func LoadConfig(customPath string) (*Config, error) {

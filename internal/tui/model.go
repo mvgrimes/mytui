@@ -60,8 +60,8 @@ type Result struct {
 	FormattedData   string // Scrollable data (remaining lines)
 	Viewport        viewport.Model
 	Format          formatter.Format
-	XOffset         int // Track horizontal scroll offset for pinned header
-	SelectedRow     int // -1 = no selection, 0 = first data row
+	XOffset         int    // Track horizontal scroll offset for pinned header
+	SelectedRow     int    // -1 = no selection, 0 = first data row
 	SearchActive    bool   // search prompt is open
 	SearchQuery     string // last accepted search term (for n/N)
 	SearchInput     string // text being typed in prompt

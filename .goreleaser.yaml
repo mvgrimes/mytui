@@ -58,9 +58,9 @@ homebrew_casks:
     repository:
       owner: mvgrimes
       name: homebrew-tap
+    homepage: https://github.com/mvgrimes/mytui
+    description: Command-line client for MySQL and MariaDB with auto-completion and syntax highlighting, reimagined in Go
     hooks:
       post:
         install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/mytui"]
-          end
+          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/mytui"] if OS.mac?
