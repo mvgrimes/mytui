@@ -125,8 +125,8 @@ func (m *Model) openRowDetailModal(res *Result) {
 	content := formatRowVertical(res.DbResult.Headers, interfaceSliceToStrings(row))
 
 	// Create viewport for scrolling
-	modalWidth := min(m.width-10, 80)
-	modalHeight := min(m.height-10, 20)
+	modalWidth := min(m.width-10, 100)
+	modalHeight := min(m.height-10, 40)
 
 	m.rowDetailViewport = viewport.New(modalWidth, modalHeight)
 	m.rowDetailViewport.SetContent(content)
