@@ -120,7 +120,7 @@ func (m Model) updateGlobalKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 	default:
-		if msg.Type == tea.KeyCtrlAt || (msg.Type == tea.KeySpace && msg.Alt) || msg.String() == "ctrl+ " || msg.String() == "ctrl+space" {
+		if msg.String() == "ctrl+ " || msg.String() == "ctrl+space" {
 			m.showMenu = true
 			m.menuIndex = 0
 			m.menuType = MenuMain
