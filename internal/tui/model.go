@@ -126,6 +126,13 @@ type Model struct {
 
 	// Results list vertical scroll offset (lines scrolled off the top)
 	resultsScrollOffset int
+
+	// History search modal state
+	showHistorySearch   bool
+	historyTimestamps   []string
+	historySearchFilter string
+	historySearchIndex  int // index in filtered list
+	historySearchScroll int // first visible row in the list
 }
 
 type MenuCommand struct {
@@ -302,20 +309,21 @@ func NewModel(conn *db.Connection, cfg *config.Config) Model {
 	ta.Prompt = ""
 	ta.ShowLineNumbers = false
 
-	history, _ := loadHistory(cfg.HistoryFile)
+	history, timestamps := loadHistory(cfg.HistoryFile)
 
 	m := Model{
-		textarea:      ta,
-		results:       []*Result{},
-		focusedResult: -1,
-		conn:          conn,
-		config:        cfg,
-		completer:     completion.NewCompleter(),
-		vimState:      vim.NewVimState(),
-		focus:         FocusQuery,
-		history:       history,
-		historyIndex:  len(history),
-		currentFormat: formatter.Format(cfg.TableFormat),
+		textarea:          ta,
+		results:           []*Result{},
+		focusedResult:     -1,
+		conn:              conn,
+		config:            cfg,
+		completer:         completion.NewCompleter(),
+		vimState:          vim.NewVimState(),
+		focus:             FocusQuery,
+		history:           history,
+		historyTimestamps: timestamps,
+		historyIndex:      len(history),
+		currentFormat:     formatter.Format(cfg.TableFormat),
 	}
 	m.UpdateCursorStyle()
 	return m
@@ -447,6 +455,21 @@ func (m *Model) scrollResultsToBottom() {
 	} else {
 		m.resultsScrollOffset = 0
 	}
+}
+
+// historyListHeight returns the number of list rows available inside the
+// history search modal given the current terminal height.
+func (m *Model) historyListHeight() int {
+	modalHeight := m.height - 4
+	if modalHeight < 10 {
+		modalHeight = 10
+	}
+	chromeLines := 12
+	listHeight := modalHeight - chromeLines
+	if listHeight < 3 {
+		listHeight = 3
+	}
+	return listHeight
 }
 
 // clampResultsScrollOffset ensures resultsScrollOffset stays within valid bounds.

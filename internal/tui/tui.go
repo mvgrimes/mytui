@@ -165,6 +165,56 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Handle history search modal
+		if m.showHistorySearch {
+			indices := m.filteredHistoryIndices()
+			switch msg.Type {
+			case tea.KeyEsc:
+				m.showHistorySearch = false
+				return m, m.textarea.Focus()
+			case tea.KeyEnter:
+				if len(indices) > 0 && m.historySearchIndex >= 0 && m.historySearchIndex < len(indices) {
+					query := m.history[indices[m.historySearchIndex]]
+					m.textarea.SetValue(query)
+					m.textarea.CursorEnd()
+				}
+				m.showHistorySearch = false
+				m.showSuggestions = false
+				return m, m.textarea.Focus()
+			case tea.KeyUp:
+				if m.historySearchIndex < len(indices)-1 {
+					m.historySearchIndex++
+				}
+				m.historySearchClampScroll(m.historyListHeight())
+				return m, nil
+			case tea.KeyDown:
+				if m.historySearchIndex > 0 {
+					m.historySearchIndex--
+				}
+				m.historySearchClampScroll(m.historyListHeight())
+				return m, nil
+			case tea.KeyBackspace:
+				if len(m.historySearchFilter) > 0 {
+					m.historySearchFilter = m.historySearchFilter[:len(m.historySearchFilter)-1]
+					m.historySearchIndex = 0
+					m.historySearchScroll = 0
+				}
+				return m, nil
+			case tea.KeyRunes:
+				m.historySearchFilter += string(msg.Runes)
+				m.historySearchIndex = 0
+				m.historySearchScroll = 0
+				return m, nil
+			}
+			// Also handle space in filter
+			if msg.Type == tea.KeySpace {
+				m.historySearchFilter += " "
+				m.historySearchIndex = 0
+				m.historySearchScroll = 0
+			}
+			return m, nil
+		}
+
 		if m.showMenu {
 			if m.menuType == MenuSaveFavorite {
 				switch msg.Type {
@@ -368,6 +418,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.showSuggestions = false
 			}
+			return m, nil
+		case tea.KeyCtrlR:
+			m.openHistorySearch()
 			return m, nil
 		case tea.KeyCtrlP:
 			if m.focus == FocusQuery {
@@ -1212,7 +1265,7 @@ func (m Model) View() string {
 		if m.vimState.Mode == vim.NormalMode {
 			helpTextStr = "gi:INSERT · gs:SELECT · gd:DELETE · gc:CREATE · gf:fields · gt:table · gw:where · Tab:focus"
 		} else {
-			helpTextStr = "Ctrl+K:autocomplete · Ctrl+Space:menu · Ctrl+P/N:history · Ctrl+X s/i/d/c:SQL · Ctrl+X f/t/w:jump · Tab:focus"
+			helpTextStr = "Ctrl+K:autocomplete · Ctrl+Space:menu · Ctrl+R:history search · Ctrl+P/N:history · Ctrl+X s/i/d/c:SQL · Ctrl+X f/t/w:jump · Tab:focus"
 		}
 	}
 	helpText := helpStyle.Render(helpTextStr)
@@ -1290,6 +1343,13 @@ func (m Model) View() string {
 
 	if m.showCopyMenu {
 		fg := m.renderCopyMenu()
+		bg := ensureBackgroundSize(view, fg, m.width, m.height)
+		fgWidth, fgHeight := lipgloss.Size(fg)
+		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
+	}
+
+	if m.showHistorySearch {
+		fg := m.renderHistorySearch()
 		bg := ensureBackgroundSize(view, fg, m.width, m.height)
 		fgWidth, fgHeight := lipgloss.Size(fg)
 		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)

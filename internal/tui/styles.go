@@ -51,4 +51,36 @@ var (
 				Foreground(lipgloss.Color("#FFFFFF")).
 				Background(lipgloss.Color("#444466")).
 				Bold(true)
+
+	// History search modal styles
+	historyBorderStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#00AAFF")).
+				Background(lipgloss.Color("#1A1A1A")).
+				Padding(1, 2)
+
+	historyTitleStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#00AAFF")).
+				Bold(true)
+
+	historyItemStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#AAAAAA")).
+				Background(lipgloss.Color("#1A1A1A"))
+
+	historySelectedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#FFFFFF")).
+				Background(lipgloss.Color("#1F4080")).
+				Bold(true)
+
+	historyCountStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#888888"))
+
+	historyPreviewStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#CCCCCC")).
+				Background(lipgloss.Color("#222233"))
+
+	historyFilterStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#FFFFFF")).
+				Background(lipgloss.Color("#333333")).
+				Padding(0, 1)
 )
