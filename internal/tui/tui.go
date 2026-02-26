@@ -304,11 +304,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case " ":
 				if m.suggestionIndex >= 0 && m.suggestionIndex < len(m.suggestions) {
 					m.applySuggestion()
-					m.showSuggestions = false
-					// Insert a trailing space after applying the suggestion
-					m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeySpace})
-					consumed = true
 				}
+				m.showSuggestions = false
+				m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeySpace})
+				consumed = true
 			case ";":
 				if m.suggestionIndex >= 0 && m.suggestionIndex < len(m.suggestions) {
 					m.applySuggestion()
