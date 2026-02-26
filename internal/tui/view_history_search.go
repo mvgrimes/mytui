@@ -2,21 +2,53 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	fzfalgo "github.com/junegunn/fzf/src/algo"
+	"github.com/junegunn/fzf/src/util"
 )
 
 // filteredHistoryIndices returns indices into m.history that match the current
-// historySearchFilter (case-insensitive substring match on the query text).
-// Results are returned in reverse chronological order (newest first).
+// historySearchFilter using fuzzy matching (fzf algorithm).
+// With no filter: newest-first order. With a filter: sorted by score descending
+// (best match at index 0, which appears at the bottom of the display).
 func (m *Model) filteredHistoryIndices() []int {
-	filter := strings.ToLower(m.historySearchFilter)
-	var out []int
-	for i := len(m.history) - 1; i >= 0; i-- {
-		if filter == "" || strings.Contains(strings.ToLower(m.history[i]), filter) {
-			out = append(out, i)
+	if m.historySearchFilter == "" {
+		out := make([]int, len(m.history))
+		for i := range out {
+			out[i] = len(m.history) - 1 - i
 		}
+		return out
+	}
+
+	// fzf requires the pattern to be lowercased when caseSensitive=false.
+	pattern := []rune(strings.ToLower(m.historySearchFilter))
+	slab := util.MakeSlab(100*1024, 2048)
+
+	type scored struct {
+		idx   int
+		score int
+	}
+	var matches []scored
+
+	for i := len(m.history) - 1; i >= 0; i-- {
+		chars := util.ToChars([]byte(m.history[i]))
+		result, _ := fzfalgo.FuzzyMatchV2(false, false, true, &chars, pattern, false, slab)
+		if result.Start >= 0 {
+			matches = append(matches, scored{idx: i, score: result.Score})
+		}
+	}
+
+	// Sort by score descending so the best match is at index 0 (bottom of list).
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].score > matches[j].score
+	})
+
+	out := make([]int, len(matches))
+	for i, s := range matches {
+		out[i] = s.idx
 	}
 	return out
 }
@@ -190,7 +222,7 @@ func (m Model) renderHistorySearch() string {
 
 	// Help
 	helpLine := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).
-		Render("Up/Down: navigate  Enter: select  Esc: cancel  type to filter")
+		Render("Up/Down: navigate  Enter: select  Esc: cancel  type to fuzzy filter")
 
 	title := historyTitleStyle.Render("HISTORY SEARCH")
 
