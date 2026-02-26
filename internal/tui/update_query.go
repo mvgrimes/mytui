@@ -12,6 +12,77 @@ func (m Model) updateQueryKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 		return m, nil, false
 	}
 
+	switch msg.Type {
+	case tea.KeyCtrlK:
+		m.updateSuggestions()
+		if len(m.suggestions) > 0 {
+			m.showSuggestions = true
+			m.suggestionIndex = -1
+		} else {
+			m.showSuggestions = false
+		}
+		return m, nil, true
+	case tea.KeyCtrlR:
+		m.openHistorySearch()
+		return m, nil, true
+	case tea.KeyCtrlP:
+		if m.historyIndex > 0 {
+			m.historyIndex--
+			m.textarea.SetValue(m.history[m.historyIndex])
+			m.textarea.CursorEnd()
+			m.recalculateHeight()
+		}
+		return m, nil, true
+	case tea.KeyCtrlN:
+		if m.historyIndex < len(m.history)-1 {
+			m.historyIndex++
+			m.textarea.SetValue(m.history[m.historyIndex])
+			m.textarea.CursorEnd()
+			m.recalculateHeight()
+		} else if m.historyIndex == len(m.history)-1 {
+			m.historyIndex++
+			m.textarea.Reset()
+			m.recalculateHeight()
+		}
+		return m, nil, true
+	case tea.KeyCtrlD:
+		if m.textarea.Value() == "" {
+			return m, tea.Quit, true
+		}
+	case tea.KeyUp:
+		if m.vimState.Mode == vim.NormalMode {
+			m.textarea.CursorUp()
+			return m, nil, true
+		}
+		if m.vimState.Mode == vim.InsertMode {
+			if m.historyIndex > 0 {
+				m.historyIndex--
+				m.textarea.SetValue(m.history[m.historyIndex])
+				m.textarea.CursorEnd()
+				m.recalculateHeight()
+			}
+			return m, nil, true
+		}
+	case tea.KeyDown:
+		if m.vimState.Mode == vim.NormalMode {
+			m.textarea.CursorDown()
+			return m, nil, true
+		}
+		if m.vimState.Mode == vim.InsertMode {
+			if m.historyIndex < len(m.history)-1 {
+				m.historyIndex++
+				m.textarea.SetValue(m.history[m.historyIndex])
+				m.textarea.CursorEnd()
+				m.recalculateHeight()
+			} else if m.historyIndex == len(m.history)-1 {
+				m.historyIndex++
+				m.textarea.Reset()
+				m.recalculateHeight()
+			}
+			return m, nil, true
+		}
+	}
+
 	if m.vimState.Mode == vim.NormalMode {
 		return m.updateQueryNormalMode(msg)
 	}
