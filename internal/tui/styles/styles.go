@@ -1,85 +1,85 @@
-package tui
+package styles
 
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	headerStyle = lipgloss.NewStyle().
+	HeaderStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#AAAAAA")).
 			Background(lipgloss.Color("#222222"))
 
-	headerFocusStyle = lipgloss.NewStyle().
+	HeaderFocusStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#0A0A0A")).
 				Background(lipgloss.Color("#FAB283")).
 				Bold(true)
 
 	// Selected row highlight style - subtle dark blue background
-	selectedRowStyle = lipgloss.NewStyle().
+	SelectedRowStyle = lipgloss.NewStyle().
 				Background(lipgloss.Color("#2A2A3A"))
 
 	// Row detail modal styles
-	rowDetailBorderStyle = lipgloss.NewStyle().
+	RowDetailBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("#00AAFF")).
 				Background(lipgloss.Color("#1A1A1A")).
 				Padding(1, 2)
 
-	rowDetailTitleStyle = lipgloss.NewStyle().
+	RowDetailTitleStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#00AAFF")).
 				Bold(true)
 
-	rowDetailLabelStyle = lipgloss.NewStyle().
+	RowDetailLabelStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#888888"))
 
-	rowDetailValueStyle = lipgloss.NewStyle().
+	RowDetailValueStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#FFFFFF"))
 
 	// Copy menu styles
-	copyMenuBorderStyle = lipgloss.NewStyle().
+	CopyMenuBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("#00AAFF")).
 				Background(lipgloss.Color("#1A1A1A")).
 				Padding(1, 2)
 
-	copyMenuTitleStyle = lipgloss.NewStyle().
+	CopyMenuTitleStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#00AAFF")).
 				Bold(true)
 
-	copyMenuItemStyle = lipgloss.NewStyle().
+	CopyMenuItemStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#AAAAAA"))
 
-	copyMenuSelectedStyle = lipgloss.NewStyle().
+	CopyMenuSelectedStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#FFFFFF")).
 				Background(lipgloss.Color("#444466")).
 				Bold(true)
 
 	// History search modal styles
-	historyBorderStyle = lipgloss.NewStyle().
+	HistoryBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("#00AAFF")).
 				Background(lipgloss.Color("#1A1A1A")).
 				Padding(1, 2)
 
-	historyTitleStyle = lipgloss.NewStyle().
+	HistoryTitleStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#00AAFF")).
 				Bold(true)
 
-	historyItemStyle = lipgloss.NewStyle().
+	HistoryItemStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#AAAAAA")).
 				Background(lipgloss.Color("#1A1A1A"))
 
-	historySelectedStyle = lipgloss.NewStyle().
+	HistorySelectedStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#FFFFFF")).
 				Background(lipgloss.Color("#1F4080")).
 				Bold(true)
 
-	historyCountStyle = lipgloss.NewStyle().
+	HistoryCountStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#888888"))
 
-	historyPreviewStyle = lipgloss.NewStyle().
+	HistoryPreviewStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#CCCCCC")).
 				Background(lipgloss.Color("#222233"))
 
-	historyFilterStyle = lipgloss.NewStyle().
+	HistoryFilterStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#FFFFFF")).
 				Background(lipgloss.Color("#333333")).
 				Padding(0, 1)

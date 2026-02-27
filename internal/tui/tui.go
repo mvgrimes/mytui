@@ -9,14 +9,16 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mvgrimes/mytui/internal/completion"
-	"github.com/mvgrimes/mytui/internal/formatter"
 	"github.com/mvgrimes/mytui/internal/parser"
-	"github.com/mvgrimes/mytui/internal/special"
+	"github.com/mvgrimes/mytui/internal/tui/components/menu"
+	"github.com/mvgrimes/mytui/internal/tui/components/modals"
+	"github.com/mvgrimes/mytui/internal/tui/components/query"
+	"github.com/mvgrimes/mytui/internal/tui/components/results"
+	"github.com/mvgrimes/mytui/internal/tui/components/suggestions"
+	"github.com/mvgrimes/mytui/internal/tui/core"
 	"github.com/mvgrimes/mytui/internal/vim"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
-
-// Styles moved to styles.go
 
 func (m Model) Init() tea.Cmd {
 	return m.refreshCacheCmd()
@@ -28,11 +30,12 @@ func (m *Model) saveToHistory(line string) {
 	}
 
 	// Update in-memory
-	m.history = append(m.history, line)
-	m.historyIndex = len(m.history)
+	now := time.Now().Format("2006-01-02 15:04:05")
+	m.query.History = append(m.query.History, line)
+	m.query.HistoryIndex = len(m.query.History)
+	m.query.HistoryTimestamps = append(m.query.HistoryTimestamps, now)
 
 	// Update file
-	now := time.Now().Format("2006-01-02 15:04:05")
 	f, err := os.OpenFile(m.config.HistoryFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
@@ -48,7 +51,7 @@ func (m *Model) saveToHistory(line string) {
 
 func (m *Model) recalculateHeight() {
 	// Give each result its needed space, up to its DisplaySize
-	for _, r := range m.results {
+	for _, r := range m.results.Results {
 		r.Viewport.Width = m.width
 		if r.Expanded {
 			// Use FormattedData if available (pinned header case), otherwise use full Formatted
@@ -66,53 +69,8 @@ func (m *Model) recalculateHeight() {
 			r.Viewport.Height = 0
 		}
 	}
-	m.clampResultsScrollOffset()
-}
-
-// ensureFocusedResultVisible adjusts resultsScrollOffset so the focused result is visible.
-func (m *Model) ensureFocusedResultVisible() {
-	if m.focusedResult < 0 || m.focusedResult >= len(m.results) {
-		return
-	}
-
-	// Compute the top y-position of the focused result in the full results rendering.
-	top := 0
-	for i, r := range m.results {
-		if i == m.focusedResult {
-			break
-		}
-		top++ // result header line
-		if r.Expanded {
-			if r.FormattedHeader != "" {
-				top += strings.Count(r.FormattedHeader, "\n") + 1
-			}
-			top += r.Viewport.Height
-		}
-	}
-
-	r := m.results[m.focusedResult]
-	height := 1 // result header line
-	if r.Expanded {
-		if r.FormattedHeader != "" {
-			height += strings.Count(r.FormattedHeader, "\n") + 1
-		}
-		height += r.Viewport.Height
-	}
-	bottom := top + height
-
-	available := m.computeAvailableHeight()
-
-	// Scroll up if result is above the visible area.
-	if top < m.resultsScrollOffset {
-		m.resultsScrollOffset = top
-	}
-	// Scroll down if result extends below the visible area.
-	if bottom > m.resultsScrollOffset+available {
-		m.resultsScrollOffset = bottom - available
-	}
-	if m.resultsScrollOffset < 0 {
-		m.resultsScrollOffset = 0
-	}
+	available := results.ComputeAvailableHeight(m.query.Textarea.Value(), m.query.Textarea.Placeholder, m.height)
+	results.ClampScrollOffset(&m.results, available)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -123,56 +81,128 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.completer.UpdateCache(msg)
 		return m, nil
 	case tea.KeyMsg:
-		if updated, cmd, handled := m.updateModalKey(msg); handled {
-			return updated, cmd
+		if handled, cmd := modals.UpdateRowDetail(&m.modals.RowDetail, msg); handled {
+			return m, cmd
 		}
-		if updated, cmd, handled := m.updateSuggestionsKey(msg); handled {
-			return updated, cmd
+		if handled, cmd := modals.UpdateCopyMenu(&m.modals.CopyMenu, msg, modals.CopyMenuDeps{
+			OnCopy: func(formatIndex int) tea.Cmd {
+				if m.results.FocusedResultIndex < 0 || m.results.FocusedResultIndex >= len(m.results.Results) {
+					return nil
+				}
+				res := m.results.Results[m.results.FocusedResultIndex]
+				name := modals.CopyRowToClipboard(res, core.CopyFormat(formatIndex), m.config)
+				m.specialOutput.Reset()
+				fmt.Fprintf(&m.specialOutput, "Row copied to clipboard as %s.\n", name)
+				m.addResultFromText(m.specialOutput.String(), "Copy Row")
+				m.focus = core.FocusQuery
+				query.UpdateCursorStyle(&m.query, m.focus, m.vimState)
+				return m.query.Textarea.Focus()
+			},
+		}); handled {
+			return m, cmd
 		}
-		if updated, cmd, handled := m.updateGlobalKey(msg); handled {
-			return updated, cmd
+		if handled, cmd := modals.UpdateHistorySearch(&m.modals.HistorySearch, msg, modals.HistoryDeps{
+			History:            m.query.History,
+			Timestamps:         m.query.HistoryTimestamps,
+			ListHeight:         m.historyListHeight(),
+			SetQueryText:       func(q string) { m.query.Textarea.SetValue(q); m.query.Textarea.CursorEnd() },
+			TextareaFocus:      func() tea.Cmd { return m.query.Textarea.Focus() },
+			SetShowSuggestions: func(show bool) { m.suggestions.Show = show },
+		}); handled {
+			return m, cmd
 		}
-		if updated, cmd, handled := m.updateResultsKey(msg); handled {
-			return updated, cmd
+		if handled, cmd := menu.Update(&m.menu, msg, m.buildMenuCommands(), menu.UpdateDeps{
+			OnSaveFavorite: func(name string) tea.Cmd {
+				m.SaveFavorite(name)
+				return nil
+			},
+		}); handled {
+			return m, cmd
 		}
-		if updated, cmd, handled := m.updateQueryKey(msg); handled {
-			return updated, cmd
+		if handled, cmd := suggestions.UpdateKey(&m.suggestions, msg, suggestions.UpdateDeps{
+			FocusQuery:        m.focus == core.FocusQuery,
+			VimState:          m.vimState,
+			Textarea:          &m.query.Textarea,
+			RecalculateHeight: m.recalculateHeight,
+			UpdateSuggestions: func() { m.query.UpdateSuggestions(m.completer, &m.suggestions) },
+			ApplySuggestion:   func() { m.query.ApplySuggestion(&m.suggestions) },
+			ShouldOpenOnEdit:  func() bool { return m.query.ShouldOpenSuggestionsOnEdit(m.focus) },
+		}); handled {
+			return m, cmd
+		}
+		if handled, cmd := m.updateGlobalKey(msg); handled {
+			return m, cmd
+		}
+		if handled, cmd := results.UpdateKey(&m.results, msg, results.UpdateDeps{
+			Focus:              m.focus,
+			FocusedResultIndex: m.results.FocusedResultIndex,
+			Width:              m.width,
+			Config:             m.config,
+			ConnExecute:        m.conn.ExecuteQuery,
+			OpenRowDetail: func(res *core.Result) {
+				modals.OpenRowDetail(&m.modals.RowDetail, res, m.width, m.height)
+			},
+			OpenCopyMenu: func() {
+				m.modals.CopyMenu.Show = true
+				m.modals.CopyMenu.Index = 0
+			},
+			OpenRowInEditor: func(res *core.Result) tea.Cmd {
+				return modals.OpenRowInEditor(res)
+			},
+			SetFocus:          func(f core.Focus) { m.focus = f },
+			SetFocusedResult:  func(i int) { m.results.FocusedResultIndex = i },
+			SetQueryText:      func(q string) { m.query.Textarea.SetValue(q) },
+			TextareaFocus:     func() tea.Cmd { return m.query.Textarea.Focus() },
+			RecalculateHeight: m.recalculateHeight,
+		}); handled {
+			return m, cmd
+		}
+		if handled, cmd := query.UpdateKey(&m.query, msg, query.UpdateDeps{
+			Focus:             m.focus,
+			VimState:          m.vimState,
+			Suggestions:       &m.suggestions,
+			Completer:         m.completer,
+			OpenHistorySearch: func() { modals.OpenHistorySearch(&m.modals.HistorySearch) },
+			RecalculateHeight: m.recalculateHeight,
+			ExecuteQuery:      func(q string) tea.Cmd { return m.executeQuery(q) },
+		}); handled {
+			return m, cmd
 		}
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.textarea.SetWidth(msg.Width)
-		for _, r := range m.results {
+		m.query.Textarea.SetWidth(msg.Width)
+		for _, r := range m.results.Results {
 			r.Viewport.Width = msg.Width
 		}
 		m.recalculateHeight()
 		return m, nil
 	}
 
-	if m.focus == FocusQuery && m.vimState.Mode == vim.InsertMode {
-		oldVal := m.textarea.Value()
-		m.textarea, tiCmd = m.textarea.Update(msg)
-		if m.textarea.Value() != oldVal {
-			m.lastError = parser.Validate(m.textarea.Value())
+	if m.focus == core.FocusQuery && m.vimState.Mode == vim.InsertMode {
+		oldVal := m.query.Textarea.Value()
+		m.query.Textarea, tiCmd = m.query.Textarea.Update(msg)
+		if m.query.Textarea.Value() != oldVal {
+			m.query.LastError = parser.Validate(m.query.Textarea.Value())
 			m.recalculateHeight()
-			m.updateSuggestions()
-			if m.shouldOpenSuggestionsOnEdit() && len(m.suggestions) > 0 {
-				if !m.showSuggestions {
-					m.suggestionIndex = -1
-				} else if m.suggestionIndex >= len(m.suggestions) {
-					m.suggestionIndex = -1
+			m.query.UpdateSuggestions(m.completer, &m.suggestions)
+			if m.query.ShouldOpenSuggestionsOnEdit(m.focus) && len(m.suggestions.Items) > 0 {
+				if !m.suggestions.Show {
+					m.suggestions.Index = -1
+				} else if m.suggestions.Index >= len(m.suggestions.Items) {
+					m.suggestions.Index = -1
 				}
-				m.showSuggestions = true
+				m.suggestions.Show = true
 			} else {
-				m.showSuggestions = false
+				m.suggestions.Show = false
 			}
 		}
-	} else if m.focus == FocusQuery && m.vimState.Mode == vim.NormalMode {
-		oldVal := m.textarea.Value()
+	} else if m.focus == core.FocusQuery && m.vimState.Mode == vim.NormalMode {
+		oldVal := m.query.Textarea.Value()
 		if _, ok := msg.(tea.KeyMsg); !ok {
-			m.textarea, tiCmd = m.textarea.Update(msg)
+			m.query.Textarea, tiCmd = m.query.Textarea.Update(msg)
 		}
-		if m.textarea.Value() != oldVal {
+		if m.query.Textarea.Value() != oldVal {
 			m.recalculateHeight()
 		}
 	}
@@ -180,14 +210,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var resCmds []tea.Cmd
 	_, isKey := msg.(tea.KeyMsg)
 	if !isKey {
-		for _, r := range m.results {
+		for _, r := range m.results.Results {
 			var cmd tea.Cmd
 			r.Viewport, cmd = r.Viewport.Update(msg)
 			resCmds = append(resCmds, cmd)
 		}
-	} else if m.focus == FocusResults && m.focusedResult >= 0 && m.focusedResult < len(m.results) {
+	} else if m.focus == core.FocusResults && m.results.FocusedResultIndex >= 0 && m.results.FocusedResultIndex < len(m.results.Results) {
 		var cmd tea.Cmd
-		m.results[m.focusedResult].Viewport, cmd = m.results[m.focusedResult].Viewport.Update(msg)
+		m.results.Results[m.results.FocusedResultIndex].Viewport, cmd = m.results.Results[m.results.FocusedResultIndex].Viewport.Update(msg)
 		resCmds = append(resCmds, cmd)
 	}
 
@@ -204,73 +234,27 @@ func (m Model) refreshCacheCmd() tea.Cmd {
 	}
 }
 
-func (m Model) executeQuery(query string) (Model, tea.Cmd) {
-	trimmedQuery := strings.TrimSpace(query)
-	lowerQuery := strings.ToLower(trimmedQuery)
-	if lowerQuery == "exit" || lowerQuery == "quit" {
-		return m, tea.Quit
+func (m *Model) historyListHeight() int {
+	modalHeight := m.height - 4
+	if modalHeight < 10 {
+		modalHeight = 10
 	}
-
-	m.specialOutput.Reset()
-	if special.Handle(trimmedQuery, &m) {
-		m.addResultFromText(m.specialOutput.String(), trimmedQuery)
-		m.recalculateHeight()
-		m.textarea.Reset()
-		m.saveToHistory(query)
-		return m, nil
+	chromeLines := 12
+	listHeight := modalHeight - chromeLines
+	if listHeight < 3 {
+		listHeight = 3
 	}
-
-	format := m.currentFormat
-	if m.onceFormat != "" {
-		format = m.onceFormat
-		m.onceFormat = ""
-	}
-
-	if strings.HasSuffix(trimmedQuery, "\\G") {
-		format = formatter.FormatVertical
-		query = strings.TrimSuffix(trimmedQuery, "\\G")
-	}
-
-	m.saveToHistory(query)
-	m.lastQuery = query
-
-	result, err := m.conn.ExecuteQuery(query)
-	if err != nil {
-		wrappedError := lipgloss.NewStyle().Width(m.width - 2).Render(fmt.Sprintf("Error: %v", err))
-		m.addResultFromText(wrappedError, query)
-		m.recalculateHeight()
-		return m, nil
-	} else {
-		m.addResult(result, query, format)
-		m.recalculateHeight()
-		m.textarea.Reset()
-		if len(result.Headers) > 0 {
-			m.focus = FocusResults
-			m.textarea.Blur()
-		}
-
-		upperQuery := strings.ToUpper(trimmedQuery)
-		if strings.HasPrefix(upperQuery, "USE") ||
-			strings.HasPrefix(upperQuery, "CREATE") ||
-			strings.HasPrefix(upperQuery, "DROP") ||
-			strings.HasPrefix(upperQuery, "ALTER") {
-			return m, m.refreshCacheCmd()
-		}
-	}
-
-	return m, nil
+	return listHeight
 }
 
-// View helpers moved into separate files for clarity
-
 func (m Model) View() string {
-	m.UpdateCursorStyle()
+	query.UpdateCursorStyle(&m.query, m.focus, m.vimState)
 
-	qHeader := m.renderQueryHeader(m.focus == FocusQuery)
+	qHeader := query.RenderHeader(m.focus == core.FocusQuery, m.width, m.conn.Config.User, m.conn.Config.Host, m.conn.Config.Port, m.conn.GetCurrentDatabase(), m.vimState, m.conn.Config.Socket)
 
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Margin(0, 1)
 	helpTextStr := "j/k:select · /:search · n/N:next/prev · Enter:detail · y:copy · v:edit · d:delete · R:rerun · +/-:size · Tab:focus"
-	if m.focus == FocusQuery {
+	if m.focus == core.FocusQuery {
 		if m.vimState.Mode == vim.NormalMode {
 			helpTextStr = "gi:INSERT · gs:SELECT · gd:DELETE · gc:CREATE · gf:fields · gt:table · gw:where · Tab:focus"
 		} else {
@@ -279,8 +263,9 @@ func (m Model) View() string {
 	}
 	helpText := helpStyle.Render(helpTextStr)
 
-	queryView := m.renderQueryArea()
-	visibleResultsStr, visibleResultLines := m.renderResultsPanel()
+	queryView := m.query.RenderArea(m.vimState)
+	availableHeight := results.ComputeAvailableHeight(m.query.Textarea.Value(), m.query.Textarea.Placeholder, m.height)
+	visibleResultsStr, visibleResultLines := results.RenderPanel(&m.results, m.focus, m.width, availableHeight)
 
 	view := lipgloss.JoinVertical(lipgloss.Left,
 		visibleResultsStr,
@@ -289,42 +274,39 @@ func (m Model) View() string {
 		helpText,
 	)
 
-	// Modal overlays take priority (checked first).
-	// The view is now bounded to m.height lines, so m.height/2 correctly
-	// centres the modal on the visible screen.
-	if m.showRowDetail {
-		fg := m.renderRowDetailModal()
-		bg := ensureBackgroundSize(view, fg, m.width, m.height)
+	if m.modals.RowDetail.Show {
+		fg := modals.RenderRowDetail(&m.modals.RowDetail)
+		bg := modals.EnsureBackgroundSize(view, fg, m.width, m.height)
 		fgWidth, fgHeight := lipgloss.Size(fg)
 		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
 	}
 
-	if m.showCopyMenu {
-		fg := m.renderCopyMenu()
-		bg := ensureBackgroundSize(view, fg, m.width, m.height)
+	if m.modals.CopyMenu.Show {
+		fg := modals.RenderCopyMenu(&m.modals.CopyMenu)
+		bg := modals.EnsureBackgroundSize(view, fg, m.width, m.height)
 		fgWidth, fgHeight := lipgloss.Size(fg)
 		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
 	}
 
-	if m.showHistorySearch {
-		fg := m.renderHistorySearch()
-		bg := ensureBackgroundSize(view, fg, m.width, m.height)
+	if m.modals.HistorySearch.Show {
+		fg := modals.RenderHistorySearch(&m.modals.HistorySearch, m.query.History, m.query.HistoryTimestamps, m.width, m.height)
+		bg := modals.EnsureBackgroundSize(view, fg, m.width, m.height)
 		fgWidth, fgHeight := lipgloss.Size(fg)
 		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
 	}
 
-	if m.showMenu {
-		fg := m.renderMenu()
-		bg := ensureBackgroundSize(view, fg, m.width, m.height)
+	if m.menu.Show {
+		fg := menu.Render(&m.menu, m.buildMenuCommands())
+		bg := modals.EnsureBackgroundSize(view, fg, m.width, m.height)
 		fgWidth, fgHeight := lipgloss.Size(fg)
 		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
 	}
 
-	if m.showSuggestions {
-		fg := m.renderSuggestions()
-		bg := ensureBackgroundSize(view, fg, m.width, m.height)
+	if m.suggestions.Show {
+		fg := suggestions.Render(&m.suggestions)
+		bg := modals.EnsureBackgroundSize(view, fg, m.width, m.height)
 		_, fgHeight := lipgloss.Size(fg)
-		xOff, yOff := m.computeSuggestionOffsets(visibleResultLines, fgHeight)
+		xOff, yOff := suggestions.ComputeOffsets(visibleResultLines, fgHeight, &m.query.Textarea)
 		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, xOff, yOff)
 	}
 

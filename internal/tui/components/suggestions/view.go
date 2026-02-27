@@ -1,14 +1,15 @@
-package tui
+package suggestions
 
 import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-func (m Model) renderSuggestions() string {
-	if len(m.suggestions) == 0 {
+func Render(m *Model) string {
+	if len(m.Items) == 0 {
 		return ""
 	}
 
@@ -24,20 +25,20 @@ func (m Model) renderSuggestions() string {
 
 	var b strings.Builder
 	start := 0
-	if m.suggestionIndex > 5 {
-		start = m.suggestionIndex - 5
+	if m.Index > 5 {
+		start = m.Index - 5
 	}
 
-	for i := start; i < len(m.suggestions) && i < start+10; i++ {
-		s := m.suggestions[i]
+	for i := start; i < len(m.Items) && i < start+10; i++ {
+		s := m.Items[i]
 		line := fmt.Sprintf("%-20s %s", s.Text, s.Description)
-		if i == m.suggestionIndex {
+		if i == m.Index {
 			b.WriteString(activeStyle.Render(line) + "\n")
 		} else {
 			b.WriteString(style.Render(line) + "\n")
 		}
 	}
-	if len(m.suggestions) > start+10 {
+	if len(m.Items) > start+10 {
 		b.WriteString(style.Render("...") + "\n")
 	}
 
@@ -49,15 +50,15 @@ func (m Model) renderSuggestions() string {
 		Render(strings.TrimSuffix(b.String(), "\n"))
 }
 
-// computeSuggestionOffsets calculates the overlay offsets to place the suggestions popup
+// ComputeOffsets calculates the overlay offsets to place the suggestions popup
 // near the cursor. Prefers placing above the cursor, but if there's not enough space,
 // places below the cursor instead.
-func (m Model) computeSuggestionOffsets(resultsLines, fgHeight int) (int, int) {
+func ComputeOffsets(resultsLines, fgHeight int, ta *textarea.Model) (int, int) {
 	// Where the query area starts (number of lines in results view plus a header line)
 	queryTop := resultsLines + 1
 	// Cursor position within textarea
-	curLine := m.textarea.Line()
-	curCol := m.textarea.LineInfo().ColumnOffset
+	curLine := ta.Line()
+	curCol := ta.LineInfo().ColumnOffset
 	// Account for line number gutter "NN | " which is width 5
 	gutter := 5
 	xOff := gutter + curCol + 1

@@ -1,4 +1,4 @@
-package tui
+package query
 
 import (
 	"fmt"
@@ -7,10 +7,11 @@ import (
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mvgrimes/mytui/internal/tui/core"
 	"github.com/mvgrimes/mytui/internal/vim"
 )
 
-func (m Model) renderHighlightedText(text string) string {
+func (m *Model) RenderHighlightedText(text string) string {
 	lexer := lexers.Get("sql")
 	if lexer == nil {
 		lexer = lexers.Fallback
@@ -22,13 +23,13 @@ func (m Model) renderHighlightedText(text string) string {
 
 	var b strings.Builder
 	for _, tok := range iterator.Tokens() {
-		style := m.getStyleForToken(tok.Type)
+		style := getStyleForToken(tok.Type)
 		b.WriteString(style.Render(tok.Value))
 	}
 	return b.String()
 }
 
-func (m Model) getStyleForToken(t chroma.TokenType) lipgloss.Style {
+func getStyleForToken(t chroma.TokenType) lipgloss.Style {
 	s := lipgloss.NewStyle()
 	switch t {
 	case chroma.Keyword, chroma.KeywordReserved, chroma.KeywordType:
@@ -48,28 +49,28 @@ func (m Model) getStyleForToken(t chroma.TokenType) lipgloss.Style {
 	}
 }
 
-func (m Model) renderQueryArea() string {
-	val := m.textarea.Value()
+func (m *Model) RenderArea(vimState *vim.VimState) string {
+	val := m.Textarea.Value()
 	isPlaceholder := false
 	if val == "" {
-		val = m.textarea.Placeholder
+		val = m.Textarea.Placeholder
 		isPlaceholder = true
 	}
 
 	lines := strings.Split(val, "\n")
-	curLineIdx := m.textarea.Line()
-	curColIdx := m.textarea.LineInfo().ColumnOffset
+	curLineIdx := m.Textarea.Line()
+	curColIdx := m.Textarea.LineInfo().ColumnOffset
 
 	var b strings.Builder
 	for i, line := range lines {
 		displayLine := ""
 		if isPlaceholder {
 			placeholderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
-			if i == 0 && m.textarea.Focused() {
+			if i == 0 && m.Textarea.Focused() {
 				// Show cursor at start of placeholder
 				cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF")).Foreground(lipgloss.Color("#000000"))
 				// Normal mode uses a dimmer cursor
-				if m.vimState.Mode == vim.NormalMode {
+				if vimState.Mode == vim.NormalMode {
 					cursorStyle = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC")).Foreground(lipgloss.Color("#000000"))
 				}
 				runes := []rune(line)
@@ -81,7 +82,7 @@ func (m Model) renderQueryArea() string {
 			} else {
 				displayLine = placeholderStyle.Render(line)
 			}
-		} else if i == curLineIdx && m.textarea.Focused() {
+		} else if i == curLineIdx && m.Textarea.Focused() {
 			runes := []rune(line)
 			before := ""
 			cursorChar := " "
@@ -95,31 +96,31 @@ func (m Model) renderQueryArea() string {
 				before = line
 			}
 
-			hBefore := m.renderHighlightedText(before)
-			hAfter := m.renderHighlightedText(after)
+			hBefore := m.RenderHighlightedText(before)
+			hAfter := m.RenderHighlightedText(after)
 
 			cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF")).Foreground(lipgloss.Color("#000000"))
-			if m.vimState.Mode == vim.NormalMode {
+			if vimState.Mode == vim.NormalMode {
 				cursorStyle = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC")).Foreground(lipgloss.Color("#000000"))
 			}
 
 			displayLine = hBefore + cursorStyle.Render(cursorChar) + hAfter
 		} else {
-			displayLine = m.renderHighlightedText(line)
+			displayLine = m.RenderHighlightedText(line)
 		}
 
 		b.WriteString(fmt.Sprintf("%2d | %s\n", i+1, displayLine))
 	}
 
-	if m.lastError != nil && !isPlaceholder {
-		padding := m.lastError.Col + 5
-		b.WriteString(strings.Repeat(" ", padding) + lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render("^ "+m.lastError.Message) + "\n")
+	if m.LastError != nil && !isPlaceholder {
+		padding := m.LastError.Col + 5
+		b.WriteString(strings.Repeat(" ", padding) + lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render("^ "+m.LastError.Message) + "\n")
 	}
 
 	return b.String()
 }
 
-func (m Model) renderQueryHeader(focused bool) string {
+func RenderHeader(focused bool, width int, connUser, connHost string, connPort int, database string, vimState *vim.VimState, socket string) string {
 	// Determine background color based on focus
 	bg := lipgloss.Color("#222222")
 	defaultFg := lipgloss.Color("#AAAAAA")
@@ -144,18 +145,13 @@ func (m Model) renderQueryHeader(focused bool) string {
 	separator := sepStyle.Render("  •  ")
 
 	// Build connection string with conditional coloring
-	user := m.conn.Config.User
-	host := m.conn.Config.Host
-	port := m.conn.Config.Port
-	database := m.conn.GetCurrentDatabase()
-
 	userStyle := baseStyle.Foreground(defaultFg)
-	if user == "root" {
+	if connUser == "root" {
 		userStyle = userStyle.Foreground(lipgloss.Color("#FF5555")).Bold(true)
 	}
 
 	hostStyle := baseStyle.Foreground(defaultFg)
-	isLocal := host == "localhost" || host == "127.0.0.1" || m.conn.Config.Socket != ""
+	isLocal := connHost == "localhost" || connHost == "127.0.0.1" || socket != ""
 	if !isLocal {
 		hostStyle = hostStyle.Foreground(lipgloss.Color("#AA4400"))
 	}
@@ -164,16 +160,16 @@ func (m Model) renderQueryHeader(focused bool) string {
 	restStyle := baseStyle.Foreground(defaultFg)
 
 	connStr := lipgloss.JoinHorizontal(lipgloss.Left,
-		userStyle.Render(user),
+		userStyle.Render(connUser),
 		atStyle.Render("@"),
-		hostStyle.Render(host),
-		restStyle.Render(fmt.Sprintf(":%d/%s", port, database)),
+		hostStyle.Render(connHost),
+		restStyle.Render(fmt.Sprintf(":%d/%s", connPort, database)),
 	)
 
 	// Build mode indicator with square brackets
 	var modeStr string
 	modeStyle := baseStyle.Bold(true)
-	if m.vimState.Mode == vim.NormalMode {
+	if vimState.Mode == vim.NormalMode {
 		modeStyle = modeStyle.Foreground(lipgloss.Color("#DCFEAF"))
 		modeStr = modeStyle.Render("[NORMAL]")
 	} else {
@@ -185,7 +181,7 @@ func (m Model) renderQueryHeader(focused bool) string {
 	leftPart := label + separator + connStr
 	leftWidth := lipgloss.Width(leftPart)
 	rightWidth := lipgloss.Width(modeStr)
-	fillerWidth := m.width - leftWidth - rightWidth - 1 // -1 for trailing space
+	fillerWidth := width - leftWidth - rightWidth - 1 // -1 for trailing space
 	if fillerWidth < 1 {
 		fillerWidth = 1
 	}
@@ -194,6 +190,18 @@ func (m Model) renderQueryHeader(focused bool) string {
 	filler := fillerStyle.Render(strings.Repeat(" ", fillerWidth))
 
 	// Combine all parts
-	headerStyle := lipgloss.NewStyle().Background(bg).Width(m.width)
+	headerStyle := lipgloss.NewStyle().Background(bg).Width(width)
 	return headerStyle.Render(leftPart + filler + modeStr)
+}
+
+func UpdateCursorStyle(m *Model, focus core.Focus, vimState *vim.VimState) {
+	if focus != core.FocusQuery || vimState.Mode == vim.NormalMode {
+		m.Textarea.Cursor.Style = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC"))
+	} else {
+		// Try to make it look like a bar using a left border
+		m.Textarea.Cursor.Style = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#00AAFF")).
+			Border(lipgloss.NormalBorder(), false, false, false, true).
+			BorderForeground(lipgloss.Color("#00AAFF"))
+	}
 }

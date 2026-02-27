@@ -1,19 +1,19 @@
-package tui
+package menu
 
 import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mvgrimes/mytui/internal/tui/core"
 )
 
-// filteredMenuCommands returns the command list filtered by the current menuFilter.
-func (m *Model) filteredMenuCommands() []MenuCommand {
-	cmds := m.GetCommands()
-	if m.menuFilter == "" {
+// FilteredCommands returns the command list filtered by the current Filter.
+func FilteredCommands(m *Model, cmds []Command) []Command {
+	if m.Filter == "" {
 		return cmds
 	}
-	q := strings.ToLower(m.menuFilter)
-	out := make([]MenuCommand, 0, len(cmds))
+	q := strings.ToLower(m.Filter)
+	out := make([]Command, 0, len(cmds))
 	for _, c := range cmds {
 		if strings.Contains(strings.ToLower(c.Label), q) {
 			out = append(out, c)
@@ -22,7 +22,7 @@ func (m *Model) filteredMenuCommands() []MenuCommand {
 	return out
 }
 
-func (m Model) renderMenu() string {
+func Render(m *Model, cmds []Command) string {
 	style := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#FFFFFF")).
 		Background(lipgloss.Color("#1A1A1A")).
@@ -36,10 +36,10 @@ func (m Model) renderMenu() string {
 	var b strings.Builder
 
 	title := " COMMANDS "
-	switch m.menuType {
-	case MenuSaveFavorite:
+	switch m.Type {
+	case core.MenuSaveFavorite:
 		title = " SAVE FAVORITE "
-	case MenuRunFavorite:
+	case core.MenuRunFavorite:
 		title = " RUN FAVORITE "
 	}
 
@@ -50,14 +50,14 @@ func (m Model) renderMenu() string {
 		Render(title))
 	b.WriteString("\n\n")
 
-	if m.menuType == MenuSaveFavorite {
+	if m.Type == core.MenuSaveFavorite {
 		b.WriteString("Enter name for favorite:\n")
 		b.WriteString(lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(lipgloss.Color("#333333")).
 			Padding(0, 1).
 			Width(30).
-			Render(m.favoriteInput + "_"))
+			Render(m.FavoriteInput + "_"))
 		b.WriteString("\n\n")
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("Enter: Save • Esc: Cancel"))
 	} else {
@@ -68,13 +68,13 @@ func (m Model) renderMenu() string {
 			Background(lipgloss.Color("#333333")).
 			Padding(0, 1).
 			Width(30).
-			Render(m.menuFilter + "_"))
+			Render(m.Filter + "_"))
 		b.WriteString("\n\n")
 
-		commands := m.filteredMenuCommands()
+		commands := FilteredCommands(m, cmds)
 		for i, cmd := range commands {
 			line := cmd.Label
-			if i == m.menuIndex {
+			if i == m.Index {
 				b.WriteString(activeStyle.Render(line) + "\n")
 			} else {
 				b.WriteString(style.Render(line) + "\n")

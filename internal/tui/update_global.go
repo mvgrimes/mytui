@@ -1,58 +1,66 @@
 package tui
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/mvgrimes/mytui/internal/tui/components/results"
+	"github.com/mvgrimes/mytui/internal/tui/core"
+)
 
-func (m Model) updateGlobalKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
+func (m *Model) updateGlobalKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC:
-		return m, tea.Quit, true
+		return true, tea.Quit
 	case tea.KeyTab:
-		if m.focus == FocusQuery {
-			if len(m.results) > 0 {
-				m.focus = FocusResults
-				m.focusedResult = len(m.results) - 1
-				m.textarea.Blur()
-				m.ensureFocusedResultVisible()
+		if m.focus == core.FocusQuery {
+			if len(m.results.Results) > 0 {
+				m.focus = core.FocusResults
+				m.results.FocusedResultIndex = len(m.results.Results) - 1
+				m.query.Textarea.Blur()
+				available := results.ComputeAvailableHeight(m.query.Textarea.Value(), m.query.Textarea.Placeholder, m.height)
+				results.EnsureFocusedResultVisible(&m.results, available)
 			}
-			return m, nil, true
+			return true, nil
 		}
-		if m.focusedResult > 0 {
-			m.focusedResult--
-			m.ensureFocusedResultVisible()
+		if m.results.FocusedResultIndex > 0 {
+			m.results.FocusedResultIndex--
+			available := results.ComputeAvailableHeight(m.query.Textarea.Value(), m.query.Textarea.Placeholder, m.height)
+			results.EnsureFocusedResultVisible(&m.results, available)
 		} else {
-			m.focus = FocusQuery
-			m.focusedResult = -1
-			return m, m.textarea.Focus(), true
+			m.focus = core.FocusQuery
+			m.results.FocusedResultIndex = -1
+			return true, m.query.Textarea.Focus()
 		}
-		return m, nil, true
+		return true, nil
 	case tea.KeyShiftTab:
-		if m.focus == FocusQuery {
-			if len(m.results) > 0 {
-				m.focus = FocusResults
-				m.focusedResult = 0
-				m.textarea.Blur()
-				m.ensureFocusedResultVisible()
+		if m.focus == core.FocusQuery {
+			if len(m.results.Results) > 0 {
+				m.focus = core.FocusResults
+				m.results.FocusedResultIndex = 0
+				m.query.Textarea.Blur()
+				available := results.ComputeAvailableHeight(m.query.Textarea.Value(), m.query.Textarea.Placeholder, m.height)
+				results.EnsureFocusedResultVisible(&m.results, available)
 			}
-			return m, nil, true
+			return true, nil
 		}
-		if m.focusedResult < len(m.results)-1 {
-			m.focusedResult++
-			m.ensureFocusedResultVisible()
+		if m.results.FocusedResultIndex < len(m.results.Results)-1 {
+			m.results.FocusedResultIndex++
+			available := results.ComputeAvailableHeight(m.query.Textarea.Value(), m.query.Textarea.Placeholder, m.height)
+			results.EnsureFocusedResultVisible(&m.results, available)
 		} else {
-			m.focus = FocusQuery
-			m.focusedResult = -1
-			return m, m.textarea.Focus(), true
+			m.focus = core.FocusQuery
+			m.results.FocusedResultIndex = -1
+			return true, m.query.Textarea.Focus()
 		}
-		return m, nil, true
+		return true, nil
 	default:
 		if msg.String() == "ctrl+ " || msg.String() == "ctrl+space" {
-			m.showMenu = true
-			m.menuIndex = 0
-			m.menuType = MenuMain
-			m.menuFilter = ""
-			return m, nil, true
+			m.menu.Show = true
+			m.menu.Index = 0
+			m.menu.Type = core.MenuMain
+			m.menu.Filter = ""
+			return true, nil
 		}
 	}
 
-	return m, nil, false
+	return false, nil
 }

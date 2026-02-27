@@ -1,95 +1,16 @@
-package tui
+package modals
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	fzfalgo "github.com/junegunn/fzf/src/algo"
-	"github.com/junegunn/fzf/src/util"
+	"github.com/mvgrimes/mytui/internal/tui/styles"
 )
 
-// filteredHistoryIndices returns indices into m.history that match the current
-// historySearchFilter using fuzzy matching (fzf algorithm).
-// With no filter: newest-first order. With a filter: sorted by score descending
-// (best match at index 0, which appears at the bottom of the display).
-func (m *Model) filteredHistoryIndices() []int {
-	if m.historySearchFilter == "" {
-		out := make([]int, len(m.history))
-		for i := range out {
-			out[i] = len(m.history) - 1 - i
-		}
-		return out
-	}
-
-	// fzf requires the pattern to be lowercased when caseSensitive=false.
-	pattern := []rune(strings.ToLower(m.historySearchFilter))
-	slab := util.MakeSlab(100*1024, 2048)
-
-	type scored struct {
-		idx   int
-		score int
-	}
-	var matches []scored
-
-	for i := len(m.history) - 1; i >= 0; i-- {
-		chars := util.ToChars([]byte(m.history[i]))
-		result, _ := fzfalgo.FuzzyMatchV2(false, false, true, &chars, pattern, false, slab)
-		if result.Start >= 0 {
-			matches = append(matches, scored{idx: i, score: result.Score})
-		}
-	}
-
-	// Sort by score descending so the best match is at index 0 (bottom of list).
-	sort.Slice(matches, func(i, j int) bool {
-		return matches[i].score > matches[j].score
-	})
-
-	out := make([]int, len(matches))
-	for i, s := range matches {
-		out[i] = s.idx
-	}
-	return out
-}
-
-// openHistorySearch opens the history search modal positioned at the most
-// recent entry.
-func (m *Model) openHistorySearch() {
-	m.historySearchFilter = ""
-	m.historySearchScroll = 0
-	m.historySearchIndex = 0 // 0 = most recent entry in filtered list
-	m.showHistorySearch = true
-}
-
-// historySearchClampScroll adjusts historySearchScroll so that the selected
-// row is visible inside the list area.
-func (m *Model) historySearchClampScroll(listHeight int) {
-	indices := m.filteredHistoryIndices()
-	if len(indices) == 0 {
-		m.historySearchScroll = 0
-		return
-	}
-	if m.historySearchIndex < 0 {
-		m.historySearchIndex = 0
-	}
-	if m.historySearchIndex >= len(indices) {
-		m.historySearchIndex = len(indices) - 1
-	}
-	if m.historySearchIndex < m.historySearchScroll {
-		m.historySearchScroll = m.historySearchIndex
-	}
-	if m.historySearchIndex >= m.historySearchScroll+listHeight {
-		m.historySearchScroll = m.historySearchIndex - listHeight + 1
-	}
-	if m.historySearchScroll < 0 {
-		m.historySearchScroll = 0
-	}
-}
-
-// renderHistorySearch renders the full-screen FZF-style history search modal.
-func (m Model) renderHistorySearch() string {
-	modalWidth := m.width - 4
+// RenderHistorySearch renders the full-screen FZF-style history search modal.
+func RenderHistorySearch(m *HistorySearchModel, history []string, timestamps []string, width int, height int) string {
+	modalWidth := width - 4
 	if modalWidth < 40 {
 		modalWidth = 40
 	}
@@ -100,14 +21,14 @@ func (m Model) renderHistorySearch() string {
 		innerWidth = 30
 	}
 
-	indices := m.filteredHistoryIndices()
-	total := len(m.history)
+	indices := filteredHistoryIndices(history, m.Filter)
+	total := len(history)
 	matched := len(indices)
 
 	// Compute the list height: modal height minus fixed chrome lines.
 	// Fixed lines: title(1) + blank(1) + separator(1) + count(1) + blank(1) +
 	//              preview_header(1) + preview lines(3) + blank(1) + filter(1) + help(1) = 12
-	modalHeight := m.height - 4
+	modalHeight := height - 4
 	if modalHeight < 10 {
 		modalHeight = 10
 	}
@@ -118,8 +39,8 @@ func (m Model) renderHistorySearch() string {
 	}
 
 	// Clamp index and scroll without mutating receiver (copy values)
-	selIdx := m.historySearchIndex
-	scroll := m.historySearchScroll
+	selIdx := m.Index
+	scroll := m.Scroll
 	if len(indices) == 0 {
 		selIdx = -1
 		scroll = 0
@@ -150,10 +71,10 @@ func (m Model) renderHistorySearch() string {
 	for i := end - 1; i >= scroll; i-- {
 		histIdx := indices[i]
 		ts := ""
-		if histIdx < len(m.historyTimestamps) {
-			ts = m.historyTimestamps[histIdx]
+		if histIdx < len(timestamps) {
+			ts = timestamps[histIdx]
 		}
-		query := m.history[histIdx]
+		query := history[histIdx]
 		// Replace newlines with spaces for single-line display
 		query = strings.ReplaceAll(query, "\n", " ")
 
@@ -174,9 +95,9 @@ func (m Model) renderHistorySearch() string {
 		}
 
 		if i == selIdx {
-			line = historySelectedStyle.Width(innerWidth).Render("> " + line)
+			line = styles.HistorySelectedStyle.Width(innerWidth).Render("> " + line)
 		} else {
-			line = historyItemStyle.Width(innerWidth).Render(prefix + line)
+			line = styles.HistoryItemStyle.Width(innerWidth).Render(prefix + line)
 		}
 		listLines = append(listLines, line)
 	}
@@ -190,12 +111,12 @@ func (m Model) renderHistorySearch() string {
 	separatorLine := lipgloss.NewStyle().Foreground(lipgloss.Color("#444444")).Render(separator)
 
 	// Count
-	countLine := historyCountStyle.Render(fmt.Sprintf("%d/%d", matched, total))
+	countLine := styles.HistoryCountStyle.Render(fmt.Sprintf("%d/%d", matched, total))
 
 	// Preview: full text of the selected entry
 	previewQuery := ""
 	if selIdx >= 0 && selIdx < len(indices) {
-		previewQuery = m.history[indices[selIdx]]
+		previewQuery = history[indices[selIdx]]
 	}
 	// Wrap preview to innerWidth, show up to 3 lines.
 	// Split on existing newlines first, then wrap each segment.
@@ -214,17 +135,17 @@ func (m Model) renderHistorySearch() string {
 	}
 	previewRendered := make([]string, len(previewLines))
 	for i, pl := range previewLines {
-		previewRendered[i] = historyPreviewStyle.Width(innerWidth).Render(pl)
+		previewRendered[i] = styles.HistoryPreviewStyle.Width(innerWidth).Render(pl)
 	}
 
 	// Filter input
-	filterLine := historyFilterStyle.Render("> " + m.historySearchFilter + "_")
+	filterLine := styles.HistoryFilterStyle.Render("> " + m.Filter + "_")
 
 	// Help
 	helpLine := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).
 		Render("Up/Down: navigate  Enter: select  Esc: cancel  type to fuzzy filter")
 
-	title := historyTitleStyle.Render("HISTORY SEARCH")
+	title := styles.HistoryTitleStyle.Render("HISTORY SEARCH")
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		title,
@@ -239,7 +160,7 @@ func (m Model) renderHistorySearch() string {
 		helpLine,
 	)
 
-	return historyBorderStyle.
+	return styles.HistoryBorderStyle.
 		Width(innerWidth + 4). // +4 for padding(2*2)
 		Render(content)
 }
