@@ -65,6 +65,7 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 	case " ":
 		if m.Index >= 0 && m.Index < len(m.Items) {
 			deps.ApplySuggestion()
+			m.Index = -1
 			*deps.Textarea, _ = deps.Textarea.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
 			deps.UpdateSuggestions()
 			consumed = true
