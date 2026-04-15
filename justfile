@@ -1,9 +1,11 @@
-APP      := "mytui"
-VERSION  := `perl -nE'm{version\s*=\s*"(\d+\.\d+.\d+)"} && print $1' ./cmd/mytui/main.go`
+APP       := "mytui"
+VER_FILE  := "./cmd/mytui/main.go"
+MAIN_FILE := "./cmd/mytui/main.go"
+VERSION   := shell('perl -nE "m{version\\s*=\\s*\"(\\d+\\.\\d+\\.\\d+)\"}i && print \$1" ' + VER_FILE)
 
 build:
-  echo "Building verions {{VERSION}} of {{APP}}"
-  go build -o {{APP}} cmd/mytui/main.go
+  echo "Building verion {{VERSION}} of {{APP}}"
+  go build -o {{APP}} {{MAIN_FILE}}
 
 lint:
   go vet ./... || true
