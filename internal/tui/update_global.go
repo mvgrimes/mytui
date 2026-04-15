@@ -53,7 +53,8 @@ func (m *Model) updateGlobalKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 	default:
-		if msg.String() == "ctrl+ " || msg.String() == "ctrl+space" {
+		// Ctrl+Space is commonly sent as NUL (Ctrl+@). Bubble Tea reports that as KeyCtrlAt.
+		if msg.Type == tea.KeyCtrlAt || msg.String() == "ctrl+ " || msg.String() == "ctrl+space" || msg.String() == "ctrl+@" {
 			m.menu.Show = true
 			m.menu.Index = 0
 			m.menu.Type = core.MenuMain
