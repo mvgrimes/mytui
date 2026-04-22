@@ -58,6 +58,12 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 			deps.RecalculateHeight()
 		}
 		return true, nil
+	case tea.KeyCtrlL:
+		m.Textarea.Reset()
+		m.HistoryIndex = len(m.History)
+		deps.Suggestions.Show = false
+		deps.RecalculateHeight()
+		return true, nil
 	case tea.KeyCtrlD:
 		if m.Textarea.Value() == "" {
 			return true, tea.Quit

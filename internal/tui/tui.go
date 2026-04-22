@@ -258,7 +258,7 @@ func (m Model) View() string {
 		if m.vimState.Mode == vim.NormalMode {
 			helpTextStr = "gi:INSERT · gs:SELECT · gd:DELETE · gc:CREATE · gf:fields · gt:table · gw:where · Tab:focus"
 		} else {
-			helpTextStr = "Ctrl+K:autocomplete · Ctrl+Space:menu · Ctrl+R:history search · Ctrl+P/N:history · Ctrl+X s/i/d/c:SQL · Ctrl+X f/t/w:jump · Tab:focus"
+			helpTextStr = "Ctrl+K:autocomplete · Ctrl+L:clear query · Ctrl+Space:menu · Ctrl+R:history search · Ctrl+P/N:history · Ctrl+X s/i/d/c:SQL · Ctrl+X f/t/w:jump · Tab:focus"
 		}
 	}
 	helpText := helpStyle.Render(helpTextStr)
