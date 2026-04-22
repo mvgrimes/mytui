@@ -85,10 +85,10 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 			consumed = true
 		}
 	case "esc":
-		if m.Index >= 0 {
-			m.Index = -1
-		} else {
-			m.Show = false
+		m.Index = -1
+		m.Show = false
+		if deps.FocusQuery {
+			deps.VimState.Mode = vim.NormalMode
 		}
 		consumed = true
 	default:
