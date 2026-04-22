@@ -69,12 +69,27 @@ func TestCompleter_Complete(t *testing.T) {
 		textBefore string
 		fullText   string
 		wantFirst  string
+		wantNot    []string
 	}{
 		{
 			name:       "keyword completion",
 			textBefore: "SEL",
 			fullText:   "SEL",
 			wantFirst:  "SELECT",
+		},
+		{
+			name:       "select keyword context excludes table names",
+			textBefore: "SELECT ",
+			fullText:   "SELECT ",
+			wantFirst:  "DISTINCT",
+			wantNot:    []string{"users"},
+		},
+		{
+			name:       "select star suggests from",
+			textBefore: "SELECT * ",
+			fullText:   "SELECT * ",
+			wantFirst:  "FROM",
+			wantNot:    []string{"SELECT", "INSERT", "UPDATE", "users"},
 		},
 		{
 			name:       "table completion after FROM",
@@ -106,6 +121,14 @@ func TestCompleter_Complete(t *testing.T) {
 			}
 			if tt.wantFirst != "" && !found {
 				t.Errorf("%s: could not find suggestion %v in %v", tt.name, tt.wantFirst, got)
+			}
+
+			for _, forbidden := range tt.wantNot {
+				for _, s := range got {
+					if s.Text == forbidden {
+						t.Errorf("%s: unexpected suggestion %v in %v", tt.name, forbidden, got)
+					}
+				}
 			}
 		})
 	}

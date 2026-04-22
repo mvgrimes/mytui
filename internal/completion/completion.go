@@ -42,6 +42,8 @@ var sqlKeywords = []string{
 	"COMMIT", "ROLLBACK", "TRANSACTION", "VALUES", "INTO", "TRUNCATE",
 }
 
+var fromKeywordPattern = regexp.MustCompile(`\bFROM\b`)
+
 var specialCommands = []Suggestion{
 	{Text: "\\T", Description: "Change output format"},
 	{Text: "\\f", Description: "Execute favorite query"},
@@ -141,6 +143,11 @@ func (c *Completer) Complete(d Document) []Suggestion {
 		return filterHasPrefix(schemas, lastWord, true)
 	}
 
+	if suggestions, ok := selectContextKeywordSuggestions(textBefore); ok {
+		lastWord := getLastWord(d.Text, d.CursorPosition)
+		return filterHasPrefix(suggestions, lastWord, true)
+	}
+
 	parsed, err := parser.Parse(d.Text)
 	if err != nil {
 		// Fallback to simple completion if parse fails
@@ -177,6 +184,27 @@ func (c *Completer) Complete(d Document) []Suggestion {
 	}
 
 	return filterHasPrefix(suggestions, lastWord, true)
+}
+
+func selectContextKeywordSuggestions(textBefore string) ([]Suggestion, bool) {
+	trimmed := strings.TrimSpace(strings.ToUpper(textBefore))
+	if !strings.HasPrefix(trimmed, "SELECT") {
+		return nil, false
+	}
+
+	afterSelect := strings.TrimSpace(strings.TrimPrefix(trimmed, "SELECT"))
+	if afterSelect == "" {
+		return []Suggestion{
+			{Text: "DISTINCT"},
+			{Text: "*"},
+		}, true
+	}
+
+	if fromKeywordPattern.MatchString(afterSelect) {
+		return nil, false
+	}
+
+	return []Suggestion{{Text: "FROM"}}, true
 }
 
 func calculatePos(text string, cursor int) token.Pos {
