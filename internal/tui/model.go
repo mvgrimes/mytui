@@ -9,6 +9,7 @@ import (
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mvgrimes/mytui/internal/completion"
 	"github.com/mvgrimes/mytui/internal/config"
 	"github.com/mvgrimes/mytui/internal/db"
@@ -73,22 +74,22 @@ func (m *Model) SetPagerOverride(p string)           { m.pagerOverride = p }
 func (m *Model) GetWriter() io.Writer                { return &m.specialOutput }
 
 func (m *Model) copyToClipboard(format formatter.Format) {
-	queryText := m.lastQuery
-	if queryText == "" {
-		queryText = m.query.Textarea.Value()
-	}
-	if queryText == "" {
+	if m.results.FocusedResultIndex < 0 || m.results.FocusedResultIndex >= len(m.results.Results) {
 		return
 	}
 
-	result, err := m.conn.ExecuteQuery(queryText)
-	if err != nil {
-		return
-	}
+	focused := m.results.Results[m.results.FocusedResultIndex]
 
 	var buf bytes.Buffer
-	formatter.RenderResult(result, &buf, format, m.config)
-	clipboard.WriteAll(buf.String())
+	if focused.DbResult != nil {
+		formatter.RenderResult(focused.DbResult, &buf, format, m.config)
+	} else {
+		buf.WriteString(focused.Formatted)
+	}
+
+	if err := clipboard.WriteAll(ansi.Strip(buf.String())); err != nil {
+		return
+	}
 
 	m.specialOutput.Reset()
 	fmt.Fprintf(&m.specialOutput, "Result copied to clipboard as %s.\n", format)
