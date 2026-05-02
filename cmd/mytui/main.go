@@ -15,7 +15,7 @@ import (
 	"github.com/mvgrimes/mytui/internal/tui"
 )
 
-var version = "0.1.16"
+var version = "0.1.17"
 
 func main() {
 	rootCmd := &cobra.Command{
