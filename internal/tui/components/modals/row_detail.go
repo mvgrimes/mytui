@@ -70,7 +70,7 @@ func OpenRowDetail(m *RowDetailModel, res *core.Result, width, height int) {
 // RenderRowDetail renders the row detail modal overlay.
 func RenderRowDetail(m *RowDetailModel) string {
 	title := styles.RowDetailTitleStyle.Render("Row Details")
-	help := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("j/k:scroll  h/l:scroll x  0/$:home/end x  q/Esc:close")
+	help := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("j/k:scroll  PgUp/PgDn:page  h/l:scroll x  0/$:home/end x  q/Esc:close")
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		title,

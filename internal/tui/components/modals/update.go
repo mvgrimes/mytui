@@ -27,6 +27,10 @@ func UpdateRowDetail(m *RowDetailModel, msg tea.KeyMsg) (bool, tea.Cmd) {
 		m.Viewport.LineDown(1)
 	case "k", "up":
 		m.Viewport.LineUp(1)
+	case "pgup":
+		m.Viewport.PageUp()
+	case "pgdown":
+		m.Viewport.PageDown()
 	case "h", "left":
 		m.Viewport.ScrollLeft(5)
 	case "l", "right":
