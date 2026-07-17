@@ -60,56 +60,66 @@ func (m *Model) RenderArea(vimState *vim.VimState) string {
 	lines := strings.Split(val, "\n")
 	curLineIdx := m.Textarea.Line()
 	curColIdx := m.Textarea.LineInfo().ColumnOffset
+	wrapWidth := m.Textarea.Width() - 5
+	if wrapWidth < 1 {
+		wrapWidth = 1
+	}
 
 	var b strings.Builder
 	for i, line := range lines {
-		displayLine := ""
-		if isPlaceholder {
-			placeholderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
-			if i == 0 && m.Textarea.Focused() {
-				// Show cursor at start of placeholder
+		segments := wrapLine(line, wrapWidth)
+		for segmentIdx, segment := range segments {
+			displayLine := ""
+			segmentStart := segmentIdx * wrapWidth
+			segmentEnd := segmentStart + len([]rune(segment))
+
+			if isPlaceholder {
+				placeholderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
+				if i == 0 && segmentIdx == 0 && m.Textarea.Focused() {
+					cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF")).Foreground(lipgloss.Color("#000000"))
+					if vimState.Mode == vim.NormalMode {
+						cursorStyle = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC")).Foreground(lipgloss.Color("#000000"))
+					}
+					runes := []rune(segment)
+					if len(runes) > 0 {
+						displayLine = cursorStyle.Render(string(runes[0])) + placeholderStyle.Render(string(runes[1:]))
+					} else {
+						displayLine = cursorStyle.Render(" ")
+					}
+				} else {
+					displayLine = placeholderStyle.Render(segment)
+				}
+			} else if i == curLineIdx && m.Textarea.Focused() && curColIdx >= segmentStart && curColIdx <= segmentEnd {
+				runes := []rune(segment)
+				relCol := curColIdx - segmentStart
+				before := ""
+				cursorChar := " "
+				after := ""
+
+				if relCol < len(runes) {
+					before = string(runes[:relCol])
+					cursorChar = string(runes[relCol])
+					after = string(runes[relCol+1:])
+				} else {
+					before = segment
+				}
+
 				cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF")).Foreground(lipgloss.Color("#000000"))
-				// Normal mode uses a dimmer cursor
 				if vimState.Mode == vim.NormalMode {
 					cursorStyle = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC")).Foreground(lipgloss.Color("#000000"))
 				}
-				runes := []rune(line)
-				if len(runes) > 0 {
-					displayLine = cursorStyle.Render(string(runes[0])) + placeholderStyle.Render(string(runes[1:]))
-				} else {
-					displayLine = cursorStyle.Render(" ")
-				}
+
+				displayLine = m.RenderHighlightedText(before) + cursorStyle.Render(cursorChar) + m.RenderHighlightedText(after)
 			} else {
-				displayLine = placeholderStyle.Render(line)
-			}
-		} else if i == curLineIdx && m.Textarea.Focused() {
-			runes := []rune(line)
-			before := ""
-			cursorChar := " "
-			after := ""
-
-			if curColIdx < len(runes) {
-				before = string(runes[:curColIdx])
-				cursorChar = string(runes[curColIdx])
-				after = string(runes[curColIdx+1:])
-			} else {
-				before = line
+				displayLine = m.RenderHighlightedText(segment)
 			}
 
-			hBefore := m.RenderHighlightedText(before)
-			hAfter := m.RenderHighlightedText(after)
-
-			cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF")).Foreground(lipgloss.Color("#000000"))
-			if vimState.Mode == vim.NormalMode {
-				cursorStyle = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC")).Foreground(lipgloss.Color("#000000"))
+			linePrefix := fmt.Sprintf("%2d | ", i+1)
+			if segmentIdx > 0 {
+				linePrefix = "   | "
 			}
-
-			displayLine = hBefore + cursorStyle.Render(cursorChar) + hAfter
-		} else {
-			displayLine = m.RenderHighlightedText(line)
+			b.WriteString(linePrefix + displayLine + "\n")
 		}
-
-		b.WriteString(fmt.Sprintf("%2d | %s\n", i+1, displayLine))
 	}
 
 	if m.LastError != nil && !isPlaceholder {
@@ -118,6 +128,24 @@ func (m *Model) RenderArea(vimState *vim.VimState) string {
 	}
 
 	return b.String()
+}
+
+func wrapLine(line string, width int) []string {
+	if width < 1 {
+		width = 1
+	}
+	runes := []rune(line)
+	if len(runes) == 0 {
+		return []string{""}
+	}
+
+	segments := make([]string, 0, (len(runes)+width-1)/width)
+	for len(runes) > width {
+		segments = append(segments, string(runes[:width]))
+		runes = runes[width:]
+	}
+	segments = append(segments, string(runes))
+	return segments
 }
 
 func RenderHeader(focused bool, width int, connUser, connHost string, connPort int, database string, vimState *vim.VimState, socket string) string {
