@@ -143,7 +143,7 @@ func (c *Completer) Complete(d Document) []Suggestion {
 		return filterHasPrefix(schemas, lastWord, true)
 	}
 
-	if suggestions, ok := selectContextKeywordSuggestions(textBefore); ok {
+	if suggestions, ok := selectContextKeywordSuggestions(d); ok {
 		lastWord := getLastWord(d.Text, d.CursorPosition)
 		return filterHasPrefix(suggestions, lastWord, true)
 	}
@@ -160,6 +160,9 @@ func (c *Completer) Complete(d Document) []Suggestion {
 
 	nodeWalker := parseutil.NewNodeWalker(parsed, pos)
 	ctx := getCompletionTypes(nodeWalker)
+	if selectFromAfterCursor(d) && completionTypeIs(ctx.types, CompletionTypeColumn) {
+		ctx.types = []completionType{CompletionTypeColumn}
+	}
 
 	definedTables, _ := parseutil.ExtractTable(parsed, pos)
 	// definedSubQueries, _ := parseutil.ExtractSubQueryViews(parsed, pos)
@@ -186,9 +189,13 @@ func (c *Completer) Complete(d Document) []Suggestion {
 	return filterHasPrefix(suggestions, lastWord, true)
 }
 
-func selectContextKeywordSuggestions(textBefore string) ([]Suggestion, bool) {
+func selectContextKeywordSuggestions(d Document) ([]Suggestion, bool) {
+	textBefore := d.TextBeforeCursor()
 	trimmed := strings.TrimSpace(strings.ToUpper(textBefore))
 	if !strings.HasPrefix(trimmed, "SELECT") {
+		return nil, false
+	}
+	if selectFromAfterCursor(d) {
 		return nil, false
 	}
 
@@ -205,6 +212,10 @@ func selectContextKeywordSuggestions(textBefore string) ([]Suggestion, bool) {
 	}
 
 	return []Suggestion{{Text: "FROM"}}, true
+}
+
+func selectFromAfterCursor(d Document) bool {
+	return d.CursorPosition < len(d.Text) && fromKeywordPattern.MatchString(strings.ToUpper(d.Text[d.CursorPosition:]))
 }
 
 func calculatePos(text string, cursor int) token.Pos {
@@ -285,7 +296,16 @@ func getCompletionTypes(nw *parseutil.NodeWalker) *CompletionContext {
 			t = []completionType{CompletionTypeTable, CompletionTypeSchema}
 		}
 	case syntaxPos == parseutil.WhereCondition:
-		t = []completionType{CompletionTypeColumn, CompletionTypeFunction}
+		if nw.CurNodeIs(memberIdentifierMatcher) {
+			mi := nw.CurNodeTopMatched(memberIdentifierMatcher).(*ast.MemberIdentifier)
+			t = []completionType{CompletionTypeColumn}
+			p = &completionParent{
+				Type: ParentTypeTable,
+				Name: mi.ParentTok.NoQuoteString(),
+			}
+		} else {
+			t = []completionType{CompletionTypeColumn, CompletionTypeFunction}
+		}
 	default:
 		t = []completionType{CompletionTypeKeyword}
 	}

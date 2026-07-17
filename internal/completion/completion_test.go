@@ -57,10 +57,18 @@ func TestCompleter_Complete(t *testing.T) {
 	c := NewCompleter()
 	cache := NewDBCache()
 	cache.DefaultSchema = "DB"
-	cache.SchemaTables["DB"] = []string{"users"}
+	cache.SchemaTables["DB"] = []string{"users", "organizations", "billings"}
 	cache.ColumnsWithParent["DB\tUSERS"] = []*db.ColumnDesc{
 		{ColumnBase: db.ColumnBase{Name: "id"}},
 		{ColumnBase: db.ColumnBase{Name: "name"}},
+	}
+	cache.ColumnsWithParent["DB\tBILLINGS"] = []*db.ColumnDesc{
+		{ColumnBase: db.ColumnBase{Name: "id"}},
+		{ColumnBase: db.ColumnBase{Name: "amount"}},
+	}
+	cache.ColumnsWithParent["DB\tORGANIZATIONS"] = []*db.ColumnDesc{
+		{ColumnBase: db.ColumnBase{Name: "id"}},
+		{ColumnBase: db.ColumnBase{Name: "display_name"}},
 	}
 	c.UpdateCache(cache)
 
@@ -96,6 +104,26 @@ func TestCompleter_Complete(t *testing.T) {
 			textBefore: "SELECT * FROM ",
 			fullText:   "SELECT * FROM ",
 			wantFirst:  "users",
+		},
+		{
+			name:       "alias column completion in where clause",
+			textBefore: "select * from organizations o where o.",
+			fullText:   "select * from organizations o where o.",
+			wantFirst:  "o.id",
+		},
+		{
+			name:       "alias column completion in select list",
+			textBefore: "select b.",
+			fullText:   "select b. from billings b;",
+			wantFirst:  "b.id",
+			wantNot:    []string{"DISTINCT", "*"},
+		},
+		{
+			name:       "column completion in select list before from",
+			textBefore: "select ",
+			fullText:   "select  from billings;",
+			wantFirst:  "id",
+			wantNot:    []string{"DISTINCT", "*"},
 		},
 	}
 
