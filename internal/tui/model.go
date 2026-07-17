@@ -203,6 +203,9 @@ func (m *Model) executeQuery(queryText string) tea.Cmd {
 	if lowerQuery == "exit" || lowerQuery == "quit" {
 		return tea.Quit
 	}
+	if trimmedQuery == "\\e" {
+		return m.openQueryInEditor()
+	}
 
 	m.specialOutput.Reset()
 	if special.Handle(trimmedQuery, m) {

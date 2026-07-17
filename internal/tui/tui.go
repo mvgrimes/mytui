@@ -80,6 +80,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case *completion.DBCache:
 		m.completer.UpdateCache(msg)
 		return m, nil
+	case queryEditorFinishedMsg:
+		if msg.err != nil {
+			m.specialOutput.Reset()
+			fmt.Fprintf(&m.specialOutput, "Error: %v\n", msg.err)
+			m.addResultFromText(m.specialOutput.String(), "Edit Query")
+			m.recalculateHeight()
+			return m, nil
+		}
+		m.query.Textarea.SetValue(msg.content)
+		m.query.Textarea.CursorEnd()
+		m.query.LastError = parser.Validate(msg.content)
+		m.suggestions.Show = false
+		m.focus = core.FocusQuery
+		m.recalculateHeight()
+		return m, m.query.Textarea.Focus()
 	case tea.KeyMsg:
 		if handled, cmd := modals.UpdateRowDetail(&m.modals.RowDetail, msg); handled {
 			return m, cmd
