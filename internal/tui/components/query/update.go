@@ -192,6 +192,13 @@ func updateNormalMode(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd)
 	}
 
 	switch keyStr {
+	case "enter":
+		query := m.Textarea.Value()
+		if strings.TrimSpace(query) != "" {
+			deps.Suggestions.Show = false
+			return true, deps.ExecuteQuery(query)
+		}
+		return true, nil
 	case "i":
 		if m.VimPendingKey == "c" || m.VimPendingKey == "d" {
 			m.VimPendingKey = m.VimPendingKey + "i"
