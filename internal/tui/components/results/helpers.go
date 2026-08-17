@@ -190,6 +190,12 @@ func ensureSelectionVisible(res *core.Result) {
 	}
 }
 
+func scrollBottomBorderIntoView(res *core.Result) {
+	if res.FormattedHeader != "" {
+		res.Viewport.SetYOffset(res.SelectedRow - res.Viewport.Height + 2)
+	}
+}
+
 func max(a, b int) int {
 	if a > b {
 		return a

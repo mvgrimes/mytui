@@ -118,6 +118,8 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 		if totalRows > 0 && res.SelectedRow < totalRows-1 {
 			res.SelectedRow++
 			ensureSelectionVisible(res)
+		} else if totalRows > 0 {
+			scrollBottomBorderIntoView(res)
 		} else if totalRows == 0 {
 			res.Viewport.LineDown(1)
 		}
@@ -189,6 +191,7 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 		if totalRows > 0 {
 			res.SelectedRow = totalRows - 1
 			ensureSelectionVisible(res)
+			scrollBottomBorderIntoView(res)
 		} else {
 			res.Viewport.GotoBottom()
 		}
@@ -209,10 +212,14 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 		if totalRows > 0 {
 			halfPage := res.Viewport.Height / 2
 			res.SelectedRow += halfPage
+			pastLastRow := res.SelectedRow >= totalRows
 			if res.SelectedRow >= totalRows {
 				res.SelectedRow = totalRows - 1
 			}
 			ensureSelectionVisible(res)
+			if pastLastRow {
+				scrollBottomBorderIntoView(res)
+			}
 		} else {
 			res.Viewport.HalfViewDown()
 		}
@@ -232,10 +239,14 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 	case "pgdown":
 		if totalRows > 0 {
 			res.SelectedRow += res.Viewport.Height
+			pastLastRow := res.SelectedRow >= totalRows
 			if res.SelectedRow >= totalRows {
 				res.SelectedRow = totalRows - 1
 			}
 			ensureSelectionVisible(res)
+			if pastLastRow {
+				scrollBottomBorderIntoView(res)
+			}
 		} else {
 			res.Viewport.HalfViewDown()
 			res.Viewport.HalfViewDown()
