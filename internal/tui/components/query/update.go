@@ -69,37 +69,11 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 			return true, tea.Quit
 		}
 	case tea.KeyUp:
-		if deps.VimState.Mode == vim.NormalMode {
-			m.Textarea.CursorUp()
-			return true, nil
-		}
-		if deps.VimState.Mode == vim.InsertMode {
-			if m.HistoryIndex > 0 {
-				m.HistoryIndex--
-				m.Textarea.SetValue(m.History[m.HistoryIndex])
-				m.Textarea.CursorEnd()
-				deps.RecalculateHeight()
-			}
-			return true, nil
-		}
+		m.Textarea.CursorUp()
+		return true, nil
 	case tea.KeyDown:
-		if deps.VimState.Mode == vim.NormalMode {
-			m.Textarea.CursorDown()
-			return true, nil
-		}
-		if deps.VimState.Mode == vim.InsertMode {
-			if m.HistoryIndex < len(m.History)-1 {
-				m.HistoryIndex++
-				m.Textarea.SetValue(m.History[m.HistoryIndex])
-				m.Textarea.CursorEnd()
-				deps.RecalculateHeight()
-			} else if m.HistoryIndex == len(m.History)-1 {
-				m.HistoryIndex++
-				m.Textarea.Reset()
-				deps.RecalculateHeight()
-			}
-			return true, nil
-		}
+		m.Textarea.CursorDown()
+		return true, nil
 	}
 
 	if deps.VimState.Mode == vim.NormalMode {

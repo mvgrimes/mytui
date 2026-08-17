@@ -20,6 +20,9 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 	if !m.Show {
 		return false, nil
 	}
+	if msg.Type == tea.KeyEnter && msg.Alt {
+		return false, nil
+	}
 
 	consumed := false
 	switch msg.String() {

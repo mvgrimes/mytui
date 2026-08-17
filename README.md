@@ -151,6 +151,7 @@ mytui -e "SELECT * FROM users LIMIT 10" mydatabase
 | `Esc` | Return to Normal mode |
 | `Enter` | Execute query |
 | `Ctrl+J` or `Alt+Enter` | Insert newline |
+| `Up` / `Down` | Move between query lines |
 | `Ctrl+K` | Open autocomplete |
 | `Ctrl+P` | Previous history |
 | `Ctrl+N` | Next history |
