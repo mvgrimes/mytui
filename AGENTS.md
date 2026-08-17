@@ -45,6 +45,17 @@ Always use `viper` for configuration. New configuration options should be added 
 ### 5. Dependency Management
 Stick to the existing libraries. Note that we are using `tablewriter v0.0.5` specifically for its stable method-based API; do not upgrade it to `v1.x` without a full refactor of the `formatter` package.
 
+### 6. TUI Vocabulary
+
+Use these terms consistently when discussing the TUI:
+
+- **Query editor**: The SQL-editing component implemented by `query.Model`.
+- **Results panel**: The aggregate results region implemented by `results.Model`. Call each `core.Result` a **result entry**; reserve **results table** for tabular data inside an entry.
+- **Row detail modal**: The `modals.RowDetailModel` overlay titled "Row Details."
+- **Command menu**: The `menu.Model` overlay. Use **main command menu** when specifically referring to `core.MenuMain`.
+
+Avoid using "window," "section," "popup," or "view" as alternate component names. Use "overlay" only to describe rendering behavior.
+
 ## Common Tasks for Agents
 
 -   **Adding a special command**:
