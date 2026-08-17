@@ -49,3 +49,26 @@ func TestAltEnterIsNotConsumedByVisibleSuggestions(t *testing.T) {
 		t.Fatal("Alt-Enter should be passed to the Query Editor")
 	}
 }
+
+func TestEscapeClosesSuggestionsWithoutLeavingInsertMode(t *testing.T) {
+	m := Model{Show: true, Index: 1}
+	vimState := vim.NewVimState()
+	vimState.Mode = vim.InsertMode
+
+	handled, _ := UpdateKey(&m, tea.KeyMsg{Type: tea.KeyEsc}, UpdateDeps{
+		FocusQuery: true,
+		VimState:   vimState,
+	})
+	if !handled {
+		t.Fatal("Escape was not consumed by visible suggestions")
+	}
+	if m.Show {
+		t.Fatal("suggestions remained visible after Escape")
+	}
+	if m.Index != -1 {
+		t.Fatalf("suggestion index after Escape = %d, want -1", m.Index)
+	}
+	if vimState.Mode != vim.InsertMode {
+		t.Fatalf("Vim mode after Escape = %v, want insert mode", vimState.Mode)
+	}
+}

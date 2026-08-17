@@ -90,9 +90,6 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 	case "esc":
 		m.Index = -1
 		m.Show = false
-		if deps.FocusQuery {
-			deps.VimState.Mode = vim.NormalMode
-		}
 		consumed = true
 	default:
 		if deps.FocusQuery && deps.VimState.Mode == vim.InsertMode {
