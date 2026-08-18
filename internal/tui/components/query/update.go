@@ -39,24 +39,10 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 		deps.OpenHistorySearch()
 		return true, nil
 	case tea.KeyCtrlP:
-		if m.HistoryIndex > 0 {
-			m.HistoryIndex--
-			m.Textarea.SetValue(m.History[m.HistoryIndex])
-			m.Textarea.CursorEnd()
-			deps.RecalculateHeight()
-		}
+		m.historyPrevious(deps.RecalculateHeight)
 		return true, nil
 	case tea.KeyCtrlN:
-		if m.HistoryIndex < len(m.History)-1 {
-			m.HistoryIndex++
-			m.Textarea.SetValue(m.History[m.HistoryIndex])
-			m.Textarea.CursorEnd()
-			deps.RecalculateHeight()
-		} else if m.HistoryIndex == len(m.History)-1 {
-			m.HistoryIndex++
-			m.Textarea.Reset()
-			deps.RecalculateHeight()
-		}
+		m.historyNext(deps.RecalculateHeight)
 		return true, nil
 	case tea.KeyCtrlL:
 		m.Textarea.Reset()
@@ -69,10 +55,18 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 			return true, tea.Quit
 		}
 	case tea.KeyUp:
-		m.Textarea.CursorUp()
+		if m.Textarea.Line() == 0 {
+			m.historyPrevious(deps.RecalculateHeight)
+		} else {
+			m.Textarea.CursorUp()
+		}
 		return true, nil
 	case tea.KeyDown:
-		m.Textarea.CursorDown()
+		if m.Textarea.Line() == m.Textarea.LineCount()-1 {
+			m.historyNext(deps.RecalculateHeight)
+		} else {
+			m.Textarea.CursorDown()
+		}
 		return true, nil
 	}
 
@@ -82,6 +76,28 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 	}
 
 	return updateInsertMode(m, msg, deps)
+}
+
+func (m *Model) historyPrevious(recalculateHeight func()) {
+	if m.HistoryIndex > 0 {
+		m.HistoryIndex--
+		m.Textarea.SetValue(m.History[m.HistoryIndex])
+		m.Textarea.CursorEnd()
+		recalculateHeight()
+	}
+}
+
+func (m *Model) historyNext(recalculateHeight func()) {
+	if m.HistoryIndex < len(m.History)-1 {
+		m.HistoryIndex++
+		m.Textarea.SetValue(m.History[m.HistoryIndex])
+		m.Textarea.CursorEnd()
+		recalculateHeight()
+	} else if m.HistoryIndex == len(m.History)-1 {
+		m.HistoryIndex++
+		m.Textarea.Reset()
+		recalculateHeight()
+	}
 }
 
 func updateNormalMode(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {

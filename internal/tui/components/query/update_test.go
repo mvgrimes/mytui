@@ -89,6 +89,48 @@ func TestInsertModeArrowKeysNavigateMultilineQuery(t *testing.T) {
 	}
 }
 
+func TestArrowKeysNavigateHistoryAtQueryBoundaries(t *testing.T) {
+	m := NewModel(&config.Config{HistoryFile: t.TempDir() + "/history"})
+	m.History = []string{"select 1", "select 2"}
+	m.HistoryIndex = len(m.History)
+	m.Textarea.SetValue("select current\nfrom dual")
+	m.Textarea.CursorUp()
+	vimState := vim.NewVimState()
+
+	recalculated := 0
+	deps := UpdateDeps{
+		Focus:             core.FocusQuery,
+		VimState:          vimState,
+		Suggestions:       &suggestions.Model{},
+		RecalculateHeight: func() { recalculated++ },
+	}
+
+	handled, _ := UpdateKey(&m, tea.KeyMsg{Type: tea.KeyUp}, deps)
+	if !handled {
+		t.Fatal("Up was not handled")
+	}
+	if got := m.Textarea.Value(); got != "select 2" {
+		t.Fatalf("query after Up on first line = %q, want %q", got, "select 2")
+	}
+	if got := m.HistoryIndex; got != 1 {
+		t.Fatalf("history index after Up on first line = %d, want 1", got)
+	}
+
+	handled, _ = UpdateKey(&m, tea.KeyMsg{Type: tea.KeyDown}, deps)
+	if !handled {
+		t.Fatal("Down was not handled")
+	}
+	if got := m.Textarea.Value(); got != "" {
+		t.Fatalf("query after Down on last line = %q, want empty query", got)
+	}
+	if got := m.HistoryIndex; got != len(m.History) {
+		t.Fatalf("history index after Down on last line = %d, want %d", got, len(m.History))
+	}
+	if recalculated != 2 {
+		t.Fatalf("height recalculations = %d, want 2", recalculated)
+	}
+}
+
 func TestCtrlPNavigateHistory(t *testing.T) {
 	m := NewModel(&config.Config{HistoryFile: t.TempDir() + "/history"})
 	m.History = []string{"select 1", "select 2"}
