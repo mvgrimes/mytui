@@ -1,16 +1,16 @@
 package tui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/mvgrimes/mytui/internal/tui/components/results"
 	"github.com/mvgrimes/mytui/internal/tui/core"
 )
 
-func (m *Model) updateGlobalKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyCtrlC:
+func (m *Model) updateGlobalKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
 		return true, tea.Quit
-	case tea.KeyTab:
+	case "tab":
 		if m.focus == core.FocusQuery {
 			if len(m.results.Results) > 0 {
 				m.focus = core.FocusResults
@@ -31,7 +31,7 @@ func (m *Model) updateGlobalKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, m.query.Textarea.Focus()
 		}
 		return true, nil
-	case tea.KeyShiftTab:
+	case "shift+tab":
 		if m.focus == core.FocusQuery {
 			if len(m.results.Results) > 0 {
 				m.focus = core.FocusResults
@@ -53,8 +53,8 @@ func (m *Model) updateGlobalKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 	default:
-		// Ctrl+Space is commonly sent as NUL (Ctrl+@). Bubble Tea reports that as KeyCtrlAt.
-		if msg.Type == tea.KeyCtrlAt || msg.String() == "ctrl+ " || msg.String() == "ctrl+space" || msg.String() == "ctrl+@" {
+		// Ctrl+Space is commonly sent as NUL (Ctrl+@), depending on the terminal.
+		if msg.String() == "ctrl+ " || msg.String() == "ctrl+space" || msg.String() == "ctrl+@" {
 			m.menu.Show = true
 			m.menu.Index = 0
 			m.menu.Type = core.MenuMain

@@ -6,9 +6,9 @@ import (
 	"io"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mvgrimes/mytui/internal/completion"
 	"github.com/mvgrimes/mytui/internal/config"
@@ -59,7 +59,6 @@ func NewModel(conn *db.Connection, cfg *config.Config) Model {
 		focus:         core.FocusQuery,
 		currentFormat: formatter.Format(cfg.TableFormat),
 	}
-	query.UpdateCursorStyle(&m.query, m.focus, m.vimState)
 	return m
 }
 

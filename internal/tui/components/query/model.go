@@ -5,8 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/cursor"
-	"github.com/charmbracelet/bubbles/textarea"
+	"charm.land/bubbles/v2/textarea"
 	"github.com/mvgrimes/mytui/internal/config"
 	"github.com/mvgrimes/mytui/internal/parser"
 )
@@ -24,13 +23,13 @@ type Model struct {
 
 func NewModel(cfg *config.Config) Model {
 	ta := textarea.New()
+	ta.SetVirtualCursor(false)
 	ta.Placeholder = "Enter SQL query..."
+	ta.Prompt = ""
+	ta.ShowLineNumbers = false
 	ta.Focus()
 	ta.SetWidth(80)
 	ta.SetHeight(3)
-	ta.Cursor.SetMode(cursor.CursorStatic)
-	ta.Prompt = ""
-	ta.ShowLineNumbers = false
 
 	history, timestamps := loadHistory(cfg.HistoryFile)
 

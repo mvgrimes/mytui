@@ -1,7 +1,7 @@
 package menu
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/mvgrimes/mytui/internal/tui/core"
 )
 
@@ -9,14 +9,14 @@ type UpdateDeps struct {
 	OnSaveFavorite func(name string) tea.Cmd
 }
 
-func Update(m *Model, msg tea.KeyMsg, cmds []Command, deps UpdateDeps) (bool, tea.Cmd) {
+func Update(m *Model, msg tea.KeyPressMsg, cmds []Command, deps UpdateDeps) (bool, tea.Cmd) {
 	if !m.Show {
 		return false, nil
 	}
 
 	if m.Type == core.MenuSaveFavorite {
-		switch msg.Type {
-		case tea.KeyEnter:
+		switch msg.Code {
+		case tea.KeyEnter, tea.KeyKpEnter:
 			cmd := deps.OnSaveFavorite(m.FavoriteInput)
 			m.Show = false
 			m.FavoriteInput = ""
@@ -32,14 +32,15 @@ func Update(m *Model, msg tea.KeyMsg, cmds []Command, deps UpdateDeps) (bool, te
 				m.FavoriteInput = m.FavoriteInput[:len(m.FavoriteInput)-1]
 			}
 			return true, nil
-		case tea.KeyRunes:
-			m.FavoriteInput += string(msg.Runes)
-			return true, nil
 		}
-		if msg.String() == "ctrl+ " || msg.String() == "ctrl+space" || msg.Type == tea.KeyCtrlAt {
+		if msg.String() == "ctrl+ " || msg.String() == "ctrl+space" || msg.String() == "ctrl+@" {
 			m.Show = false
 			m.FavoriteInput = ""
 			m.Filter = ""
+			return true, nil
+		}
+		if msg.Text != "" {
+			m.FavoriteInput += msg.Text
 			return true, nil
 		}
 		return true, nil
@@ -84,20 +85,20 @@ func Update(m *Model, msg tea.KeyMsg, cmds []Command, deps UpdateDeps) (bool, te
 		m.Filter = ""
 		return true, nil
 	}
-	if msg.Type == tea.KeyCtrlAt {
+	if msg.String() == "ctrl+@" {
 		m.Show = false
 		m.Filter = ""
 		return true, nil
 	}
-	if msg.Type == tea.KeyBackspace {
+	if msg.Code == tea.KeyBackspace {
 		if len(m.Filter) > 0 {
 			m.Filter = m.Filter[:len(m.Filter)-1]
 		}
 		m.Index = 0
 		return true, nil
 	}
-	if msg.Type == tea.KeyRunes {
-		m.Filter += string(msg.Runes)
+	if msg.Text != "" {
+		m.Filter += msg.Text
 		m.Index = 0
 		return true, nil
 	}

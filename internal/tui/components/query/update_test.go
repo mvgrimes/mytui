@@ -3,7 +3,7 @@ package query
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/mvgrimes/mytui/internal/completion"
 	"github.com/mvgrimes/mytui/internal/config"
 	"github.com/mvgrimes/mytui/internal/tui/components/suggestions"
@@ -20,7 +20,7 @@ func TestNormalModeEnterExecutesQuery(t *testing.T) {
 
 	var executed string
 	cmdRan := false
-	handled, cmd := UpdateKey(&m, tea.KeyMsg{Type: tea.KeyEnter}, UpdateDeps{
+	handled, cmd := UpdateKey(&m, tea.KeyPressMsg{Code: tea.KeyEnter}, UpdateDeps{
 		Focus:       core.FocusQuery,
 		VimState:    vimState,
 		Suggestions: &suggestionModel,
@@ -66,7 +66,7 @@ func TestInsertModeArrowKeysNavigateMultilineQuery(t *testing.T) {
 		Suggestions: &suggestions.Model{},
 	}
 
-	handled, _ := UpdateKey(&m, tea.KeyMsg{Type: tea.KeyUp}, deps)
+	handled, _ := UpdateKey(&m, tea.KeyPressMsg{Code: tea.KeyUp}, deps)
 	if !handled {
 		t.Fatal("Up was not handled")
 	}
@@ -80,7 +80,7 @@ func TestInsertModeArrowKeysNavigateMultilineQuery(t *testing.T) {
 		t.Fatalf("history index after Up = %d, want %d", got, len(m.History))
 	}
 
-	handled, _ = UpdateKey(&m, tea.KeyMsg{Type: tea.KeyDown}, deps)
+	handled, _ = UpdateKey(&m, tea.KeyPressMsg{Code: tea.KeyDown}, deps)
 	if !handled {
 		t.Fatal("Down was not handled")
 	}
@@ -105,7 +105,7 @@ func TestArrowKeysNavigateHistoryAtQueryBoundaries(t *testing.T) {
 		RecalculateHeight: func() { recalculated++ },
 	}
 
-	handled, _ := UpdateKey(&m, tea.KeyMsg{Type: tea.KeyUp}, deps)
+	handled, _ := UpdateKey(&m, tea.KeyPressMsg{Code: tea.KeyUp}, deps)
 	if !handled {
 		t.Fatal("Up was not handled")
 	}
@@ -116,7 +116,7 @@ func TestArrowKeysNavigateHistoryAtQueryBoundaries(t *testing.T) {
 		t.Fatalf("history index after Up on first line = %d, want 1", got)
 	}
 
-	handled, _ = UpdateKey(&m, tea.KeyMsg{Type: tea.KeyDown}, deps)
+	handled, _ = UpdateKey(&m, tea.KeyPressMsg{Code: tea.KeyDown}, deps)
 	if !handled {
 		t.Fatal("Down was not handled")
 	}
@@ -144,7 +144,7 @@ func TestCtrlPNavigateHistory(t *testing.T) {
 		RecalculateHeight: func() {},
 	}
 
-	handled, _ := UpdateKey(&m, tea.KeyMsg{Type: tea.KeyCtrlP}, deps)
+	handled, _ := UpdateKey(&m, tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl}, deps)
 	if !handled {
 		t.Fatal("Ctrl-P was not handled")
 	}
@@ -152,7 +152,7 @@ func TestCtrlPNavigateHistory(t *testing.T) {
 		t.Fatalf("query after Ctrl-P = %q, want %q", got, "select 2")
 	}
 
-	handled, _ = UpdateKey(&m, tea.KeyMsg{Type: tea.KeyCtrlN}, deps)
+	handled, _ = UpdateKey(&m, tea.KeyPressMsg{Code: 'n', Mod: tea.ModCtrl}, deps)
 	if !handled {
 		t.Fatal("Ctrl-N was not handled")
 	}
@@ -161,22 +161,35 @@ func TestCtrlPNavigateHistory(t *testing.T) {
 	}
 }
 
-func TestInsertModeAltEnterInsertsNewline(t *testing.T) {
-	m := NewModel(&config.Config{HistoryFile: t.TempDir() + "/history"})
-	m.Textarea.SetValue("select 1")
-	m.Textarea.CursorEnd()
-	vimState := vim.NewVimState()
-
-	handled, _ := UpdateKey(&m, tea.KeyMsg{Type: tea.KeyEnter, Alt: true}, UpdateDeps{
-		Focus:             core.FocusQuery,
-		VimState:          vimState,
-		Suggestions:       &suggestions.Model{Show: true},
-		RecalculateHeight: func() {},
-	})
-	if !handled {
-		t.Fatal("Alt-Enter was not handled")
+func TestInsertModeModifiedEnterInsertsNewline(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  tea.KeyPressMsg
+	}{
+		{name: "alt enter", msg: tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModAlt}},
+		{name: "ctrl j", msg: tea.KeyPressMsg{Code: 'j', Mod: tea.ModCtrl}},
 	}
-	if got := m.Textarea.Value(); got != "select 1\n" {
-		t.Fatalf("query after Alt-Enter = %q, want %q", got, "select 1\n")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewModel(&config.Config{HistoryFile: t.TempDir() + "/history"})
+			m.Textarea.SetValue("select 1")
+			vimState := vim.NewVimState()
+			suggestionModel := suggestions.Model{}
+
+			handled, _ := UpdateKey(&m, tt.msg, UpdateDeps{
+				Focus:             core.FocusQuery,
+				VimState:          vimState,
+				Suggestions:       &suggestionModel,
+				RecalculateHeight: func() {},
+			})
+
+			if !handled {
+				t.Fatal("modified Enter was not handled")
+			}
+			if got, want := m.Textarea.Value(), "select 1\n"; got != want {
+				t.Fatalf("textarea value = %q, want %q", got, want)
+			}
+		})
 	}
 }

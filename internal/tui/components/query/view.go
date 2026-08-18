@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/mvgrimes/mytui/internal/tui/core"
 	"github.com/mvgrimes/mytui/internal/vim"
 )
 
@@ -220,16 +219,4 @@ func RenderHeader(focused bool, width int, connUser, connHost string, connPort i
 	// Combine all parts
 	headerStyle := lipgloss.NewStyle().Background(bg).Width(width)
 	return headerStyle.Render(leftPart + filler + modeStr)
-}
-
-func UpdateCursorStyle(m *Model, focus core.Focus, vimState *vim.VimState) {
-	if focus != core.FocusQuery || vimState.Mode == vim.NormalMode {
-		m.Textarea.Cursor.Style = lipgloss.NewStyle().Background(lipgloss.Color("#CCCCCC"))
-	} else {
-		// Try to make it look like a bar using a left border
-		m.Textarea.Cursor.Style = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00AAFF")).
-			Border(lipgloss.NormalBorder(), false, false, false, true).
-			BorderForeground(lipgloss.Color("#00AAFF"))
-	}
 }

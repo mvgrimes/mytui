@@ -1,6 +1,6 @@
 package modals
 
-import tea "github.com/charmbracelet/bubbletea"
+import tea "charm.land/bubbletea/v2"
 
 type HistoryDeps struct {
 	History            []string
@@ -15,7 +15,7 @@ type CopyMenuDeps struct {
 	OnCopy func(formatIndex int) tea.Cmd
 }
 
-func UpdateRowDetail(m *RowDetailModel, msg tea.KeyMsg) (bool, tea.Cmd) {
+func UpdateRowDetail(m *RowDetailModel, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	if !m.Show {
 		return false, nil
 	}
@@ -24,9 +24,9 @@ func UpdateRowDetail(m *RowDetailModel, msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "q", "esc":
 		m.Show = false
 	case "j", "down":
-		m.Viewport.LineDown(1)
+		m.Viewport.ScrollDown(1)
 	case "k", "up":
-		m.Viewport.LineUp(1)
+		m.Viewport.ScrollUp(1)
 	case "pgup":
 		m.Viewport.PageUp()
 	case "pgdown":
@@ -48,7 +48,7 @@ func UpdateRowDetail(m *RowDetailModel, msg tea.KeyMsg) (bool, tea.Cmd) {
 	return true, nil
 }
 
-func UpdateCopyMenu(m *CopyMenuModel, msg tea.KeyMsg, deps CopyMenuDeps) (bool, tea.Cmd) {
+func UpdateCopyMenu(m *CopyMenuModel, msg tea.KeyPressMsg, deps CopyMenuDeps) (bool, tea.Cmd) {
 	if !m.Show {
 		return false, nil
 	}
@@ -73,17 +73,17 @@ func UpdateCopyMenu(m *CopyMenuModel, msg tea.KeyMsg, deps CopyMenuDeps) (bool, 
 	return true, nil
 }
 
-func UpdateHistorySearch(m *HistorySearchModel, msg tea.KeyMsg, deps HistoryDeps) (bool, tea.Cmd) {
+func UpdateHistorySearch(m *HistorySearchModel, msg tea.KeyPressMsg, deps HistoryDeps) (bool, tea.Cmd) {
 	if !m.Show {
 		return false, nil
 	}
 
 	indices := filteredHistoryIndices(deps.History, m.Filter)
-	switch msg.Type {
+	switch msg.Code {
 	case tea.KeyEsc:
 		m.Show = false
 		return true, deps.TextareaFocus()
-	case tea.KeyEnter:
+	case tea.KeyEnter, tea.KeyKpEnter:
 		if len(indices) > 0 && m.Index >= 0 && m.Index < len(indices) {
 			query := deps.History[indices[m.Index]]
 			deps.SetQueryText(query)
@@ -110,15 +110,10 @@ func UpdateHistorySearch(m *HistorySearchModel, msg tea.KeyMsg, deps HistoryDeps
 			m.Scroll = 0
 		}
 		return true, nil
-	case tea.KeyRunes:
-		m.Filter += string(msg.Runes)
-		m.Index = 0
-		m.Scroll = 0
-		return true, nil
 	}
 
-	if msg.Type == tea.KeySpace {
-		m.Filter += " "
+	if msg.Text != "" {
+		m.Filter += msg.Text
 		m.Index = 0
 		m.Scroll = 0
 	}

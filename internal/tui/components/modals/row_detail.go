@@ -8,10 +8,10 @@ import (
 	"os/exec"
 	"strings"
 
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mvgrimes/mytui/internal/config"
 	"github.com/mvgrimes/mytui/internal/formatter"
@@ -62,7 +62,7 @@ func OpenRowDetail(m *RowDetailModel, res *core.Result, width, height int) {
 	modalWidth := min(width-10, 100)
 	modalHeight := min(height-10, 40)
 
-	m.Viewport = viewport.New(modalWidth, modalHeight)
+	m.Viewport = viewport.New(viewport.WithWidth(modalWidth), viewport.WithHeight(modalHeight))
 	m.Viewport.SetContent(content)
 	m.Show = true
 }

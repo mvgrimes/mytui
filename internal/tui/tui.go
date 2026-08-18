@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/mvgrimes/mytui/internal/completion"
 	"github.com/mvgrimes/mytui/internal/parser"
 	"github.com/mvgrimes/mytui/internal/tui/components/menu"
@@ -17,7 +17,6 @@ import (
 	"github.com/mvgrimes/mytui/internal/tui/components/suggestions"
 	"github.com/mvgrimes/mytui/internal/tui/core"
 	"github.com/mvgrimes/mytui/internal/vim"
-	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 func (m Model) Init() tea.Cmd {
@@ -52,7 +51,7 @@ func (m *Model) saveToHistory(line string) {
 func (m *Model) recalculateHeight() {
 	// Give each result its needed space, up to its DisplaySize
 	for _, r := range m.results.Results {
-		r.Viewport.Width = m.width
+		r.Viewport.SetWidth(m.width)
 		if r.Expanded {
 			// Use FormattedData if available (pinned header case), otherwise use full Formatted
 			content := r.FormattedData
@@ -64,9 +63,9 @@ func (m *Model) recalculateHeight() {
 			if height > r.DisplaySize {
 				height = r.DisplaySize
 			}
-			r.Viewport.Height = height
+			r.Viewport.SetHeight(height)
 		} else {
-			r.Viewport.Height = 0
+			r.Viewport.SetHeight(0)
 		}
 	}
 	available := results.ComputeAvailableHeight(m.query.Textarea.Value(), m.query.Textarea.Placeholder, m.height)
@@ -95,7 +94,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focus = core.FocusQuery
 		m.recalculateHeight()
 		return m, m.query.Textarea.Focus()
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if handled, cmd := modals.UpdateRowDetail(&m.modals.RowDetail, msg); handled {
 			return m, cmd
 		}
@@ -110,7 +109,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				fmt.Fprintf(&m.specialOutput, "Row copied to clipboard as %s.\n", name)
 				m.addResultFromText(m.specialOutput.String(), "Copy Row")
 				m.focus = core.FocusQuery
-				query.UpdateCursorStyle(&m.query, m.focus, m.vimState)
 				return m.query.Textarea.Focus()
 			},
 		}); handled {
@@ -188,7 +186,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.query.Textarea.SetWidth(msg.Width)
 		for _, r := range m.results.Results {
-			r.Viewport.Width = msg.Width
+			r.Viewport.SetWidth(msg.Width)
 		}
 		m.recalculateHeight()
 		return m, nil
@@ -262,9 +260,7 @@ func (m *Model) historyListHeight() int {
 	return listHeight
 }
 
-func (m Model) View() string {
-	query.UpdateCursorStyle(&m.query, m.focus, m.vimState)
-
+func (m Model) View() tea.View {
 	qHeader := query.RenderHeader(m.focus == core.FocusQuery, m.width, m.conn.Config.User, m.conn.Config.Host, m.conn.Config.Port, m.conn.GetCurrentDatabase(), m.vimState, m.conn.Config.Socket)
 
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Margin(0, 1)
@@ -293,37 +289,60 @@ func (m Model) View() string {
 		fg := modals.RenderRowDetail(&m.modals.RowDetail)
 		bg := modals.EnsureBackgroundSize(view, fg, m.width, m.height)
 		fgWidth, fgHeight := lipgloss.Size(fg)
-		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
+		view = compositeOverlay(fg, bg, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
 	}
 
-	if m.modals.CopyMenu.Show {
+	if !m.modals.RowDetail.Show && m.modals.CopyMenu.Show {
 		fg := modals.RenderCopyMenu(&m.modals.CopyMenu)
 		bg := modals.EnsureBackgroundSize(view, fg, m.width, m.height)
 		fgWidth, fgHeight := lipgloss.Size(fg)
-		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
+		view = compositeOverlay(fg, bg, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
 	}
 
-	if m.modals.HistorySearch.Show {
+	if !m.modals.RowDetail.Show && !m.modals.CopyMenu.Show && m.modals.HistorySearch.Show {
 		fg := modals.RenderHistorySearch(&m.modals.HistorySearch, m.query.History, m.query.HistoryTimestamps, m.width, m.height)
 		bg := modals.EnsureBackgroundSize(view, fg, m.width, m.height)
 		fgWidth, fgHeight := lipgloss.Size(fg)
-		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
+		view = compositeOverlay(fg, bg, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
 	}
 
-	if m.menu.Show {
+	if !m.modals.RowDetail.Show && !m.modals.CopyMenu.Show && !m.modals.HistorySearch.Show && m.menu.Show {
 		fg := menu.Render(&m.menu, m.buildMenuCommands())
 		bg := modals.EnsureBackgroundSize(view, fg, m.width, m.height)
 		fgWidth, fgHeight := lipgloss.Size(fg)
-		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
+		view = compositeOverlay(fg, bg, m.width/2-fgWidth/2, m.height/2-fgHeight/2)
 	}
 
-	if m.suggestions.Show {
+	if !m.modals.RowDetail.Show && !m.modals.CopyMenu.Show && !m.modals.HistorySearch.Show && !m.menu.Show && m.suggestions.Show {
 		fg := suggestions.Render(&m.suggestions)
 		bg := modals.EnsureBackgroundSize(view, fg, m.width, m.height)
 		_, fgHeight := lipgloss.Size(fg)
 		xOff, yOff := suggestions.ComputeOffsets(visibleResultLines, fgHeight, &m.query.Textarea)
-		return overlay.Composite(fg, bg, overlay.Left, overlay.Top, xOff, yOff)
+		view = compositeOverlay(fg, bg, xOff, yOff)
 	}
 
-	return view
+	v := tea.NewView(view)
+	v.AltScreen = true
+	return v
+}
+
+func compositeOverlay(fg, bg string, x, y int) string {
+	if fg == "" {
+		return bg
+	}
+	if bg == "" {
+		return fg
+	}
+
+	bgWidth, bgHeight := lipgloss.Size(bg)
+	fgWidth, fgHeight := lipgloss.Size(fg)
+	x = min(max(x, 0), max(bgWidth-fgWidth, 0))
+	y = min(max(y, 0), max(bgHeight-fgHeight, 0))
+
+	canvas := lipgloss.NewCanvas(bgWidth, bgHeight)
+	canvas.Compose(lipgloss.NewCompositor(
+		lipgloss.NewLayer(bg),
+		lipgloss.NewLayer(fg).X(x).Y(y).Z(1),
+	))
+	return canvas.Render()
 }

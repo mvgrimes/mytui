@@ -3,7 +3,7 @@ package query
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func (m *Model) CursorPosition() int {
@@ -45,7 +45,7 @@ func (m *Model) deleteToLineStart() {
 
 	// Delete characters from start to current position
 	for i := 0; i < col; i++ {
-		m.Textarea, _ = m.Textarea.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+		m.Textarea, _ = m.Textarea.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	}
 }
 
@@ -78,12 +78,12 @@ func (m *Model) deleteInnerWord() {
 
 	// Move cursor to start of word
 	for m.CursorPosition() > start {
-		m.Textarea, _ = m.Textarea.Update(tea.KeyMsg{Type: tea.KeyLeft})
+		m.Textarea, _ = m.Textarea.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 	}
 
 	// Delete the word
 	for i := start; i < end; i++ {
-		m.Textarea, _ = m.Textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
+		m.Textarea, _ = m.Textarea.Update(tea.KeyPressMsg{Code: tea.KeyDelete})
 	}
 }
 
@@ -93,7 +93,7 @@ func (m *Model) insertSQLTemplate(template string, cursorOffset int) {
 	pos := m.CursorPosition()
 	newText := text[:pos] + template + text[pos:]
 	m.Textarea.SetValue(newText)
-	m.Textarea.SetCursor(pos + cursorOffset)
+	m.Textarea.SetCursorColumn(pos + cursorOffset)
 }
 
 // jumpToFieldsPosition moves cursor to the fields position in SELECT or INSERT
@@ -105,9 +105,9 @@ func (m *Model) jumpToFieldsPosition() {
 	if idx := strings.Index(upperText, "SELECT "); idx != -1 {
 		fromIdx := strings.Index(upperText[idx:], " FROM")
 		if fromIdx != -1 {
-			m.Textarea.SetCursor(idx + fromIdx)
+			m.Textarea.SetCursorColumn(idx + fromIdx)
 		} else {
-			m.Textarea.SetCursor(idx + 7) // After "SELECT "
+			m.Textarea.SetCursorColumn(idx + 7) // After "SELECT "
 		}
 		return
 	}
@@ -115,7 +115,7 @@ func (m *Model) jumpToFieldsPosition() {
 	// For INSERT: position inside first ()
 	if idx := strings.Index(upperText, "INSERT INTO "); idx != -1 {
 		if parenIdx := strings.Index(text[idx:], "("); parenIdx != -1 {
-			m.Textarea.SetCursor(idx + parenIdx + 1)
+			m.Textarea.SetCursorColumn(idx + parenIdx + 1)
 		}
 	}
 }
@@ -141,7 +141,7 @@ func (m *Model) jumpToTablePosition() {
 
 	for _, p := range patterns {
 		if idx := strings.Index(upperText, p.keyword); idx != -1 {
-			m.Textarea.SetCursor(idx + p.offset)
+			m.Textarea.SetCursorColumn(idx + p.offset)
 			return
 		}
 	}
@@ -154,7 +154,7 @@ func (m *Model) jumpToWherePosition() {
 
 	// If WHERE exists, position after it
 	if idx := strings.Index(upperText, "WHERE "); idx != -1 {
-		m.Textarea.SetCursor(idx + 6)
+		m.Textarea.SetCursorColumn(idx + 6)
 		return
 	}
 
@@ -169,7 +169,7 @@ func (m *Model) jumpToWherePosition() {
 	// Insert " WHERE " and position cursor
 	newText := text[:insertPos] + " WHERE " + text[insertPos:]
 	m.Textarea.SetValue(newText)
-	m.Textarea.SetCursor(insertPos + 7)
+	m.Textarea.SetCursorColumn(insertPos + 7)
 }
 
 // findCharInLine implements vim's f/F motion to find a character on the current line
@@ -190,7 +190,7 @@ func (m *Model) findCharInLine(target rune, forward bool) {
 			if rune(line[i]) == target {
 				// Move cursor right (i - col) times
 				for j := col; j < i; j++ {
-					m.Textarea, _ = m.Textarea.Update(tea.KeyMsg{Type: tea.KeyRight})
+					m.Textarea, _ = m.Textarea.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 				}
 				return
 			}
@@ -201,7 +201,7 @@ func (m *Model) findCharInLine(target rune, forward bool) {
 			if rune(line[i]) == target {
 				// Move cursor left (col - i) times
 				for j := col; j > i; j-- {
-					m.Textarea, _ = m.Textarea.Update(tea.KeyMsg{Type: tea.KeyLeft})
+					m.Textarea, _ = m.Textarea.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 				}
 				return
 			}

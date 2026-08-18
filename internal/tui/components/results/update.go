@@ -3,7 +3,7 @@ package results
 import (
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/mvgrimes/mytui/internal/config"
 	"github.com/mvgrimes/mytui/internal/db"
 	"github.com/mvgrimes/mytui/internal/formatter"
@@ -26,7 +26,7 @@ type UpdateDeps struct {
 	RecalculateHeight  func()
 }
 
-func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
+func UpdateKey(m *Model, msg tea.KeyPressMsg, deps UpdateDeps) (bool, tea.Cmd) {
 	if deps.Focus != core.FocusResults || deps.FocusedResultIndex < 0 || deps.FocusedResultIndex >= len(m.Results) {
 		return false, nil
 	}
@@ -34,13 +34,7 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 	res := m.Results[deps.FocusedResultIndex]
 
 	if res.SearchActive {
-		switch msg.Type {
-		case tea.KeyRunes:
-			res.SearchInput += string(msg.Runes)
-			if match := findMatchingRow(res, res.SearchInput, 0, true); match >= 0 {
-				res.SelectedRow = match
-				ensureSelectionVisible(res)
-			}
+		switch msg.Code {
 		case tea.KeyBackspace:
 			if len(res.SearchInput) > 0 {
 				res.SearchInput = res.SearchInput[:len(res.SearchInput)-1]
@@ -51,7 +45,7 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 					ensureSelectionVisible(res)
 				}
 			}
-		case tea.KeyEnter:
+		case tea.KeyEnter, tea.KeyKpEnter:
 			res.SearchQuery = res.SearchInput
 			res.SearchActive = false
 		case tea.KeyEsc:
@@ -59,6 +53,15 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 			res.SearchInput = ""
 			res.SearchActive = false
 			ensureSelectionVisible(res)
+		default:
+			if msg.Text == "" {
+				return true, nil
+			}
+			res.SearchInput += msg.Text
+			if match := findMatchingRow(res, res.SearchInput, 0, true); match >= 0 {
+				res.SelectedRow = match
+				ensureSelectionVisible(res)
+			}
 		}
 		return true, nil
 	}
@@ -121,7 +124,7 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 		} else if totalRows > 0 {
 			scrollBottomBorderIntoView(res)
 		} else if totalRows == 0 {
-			res.Viewport.LineDown(1)
+			res.Viewport.ScrollDown(1)
 		}
 		return true, nil
 	case "k", "up":
@@ -129,7 +132,7 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 			res.SelectedRow--
 			ensureSelectionVisible(res)
 		} else if totalRows == 0 {
-			res.Viewport.LineUp(1)
+			res.Viewport.ScrollUp(1)
 		}
 		return true, nil
 	case "h", "left":
@@ -198,19 +201,19 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 		return true, nil
 	case "ctrl+u":
 		if totalRows > 0 {
-			halfPage := res.Viewport.Height / 2
+			halfPage := res.Viewport.Height() / 2
 			res.SelectedRow -= halfPage
 			if res.SelectedRow < 0 {
 				res.SelectedRow = 0
 			}
 			ensureSelectionVisible(res)
 		} else {
-			res.Viewport.HalfViewUp()
+			res.Viewport.HalfPageUp()
 		}
 		return true, nil
 	case "ctrl+d":
 		if totalRows > 0 {
-			halfPage := res.Viewport.Height / 2
+			halfPage := res.Viewport.Height() / 2
 			res.SelectedRow += halfPage
 			pastLastRow := res.SelectedRow >= totalRows
 			if res.SelectedRow >= totalRows {
@@ -221,24 +224,24 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 				scrollBottomBorderIntoView(res)
 			}
 		} else {
-			res.Viewport.HalfViewDown()
+			res.Viewport.HalfPageDown()
 		}
 		return true, nil
 	case "pgup":
 		if totalRows > 0 {
-			res.SelectedRow -= res.Viewport.Height
+			res.SelectedRow -= res.Viewport.Height()
 			if res.SelectedRow < 0 {
 				res.SelectedRow = 0
 			}
 			ensureSelectionVisible(res)
 		} else {
-			res.Viewport.HalfViewUp()
-			res.Viewport.HalfViewUp()
+			res.Viewport.HalfPageUp()
+			res.Viewport.HalfPageUp()
 		}
 		return true, nil
 	case "pgdown":
 		if totalRows > 0 {
-			res.SelectedRow += res.Viewport.Height
+			res.SelectedRow += res.Viewport.Height()
 			pastLastRow := res.SelectedRow >= totalRows
 			if res.SelectedRow >= totalRows {
 				res.SelectedRow = totalRows - 1
@@ -248,8 +251,8 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 				scrollBottomBorderIntoView(res)
 			}
 		} else {
-			res.Viewport.HalfViewDown()
-			res.Viewport.HalfViewDown()
+			res.Viewport.HalfPageDown()
+			res.Viewport.HalfPageDown()
 		}
 		return true, nil
 	case "enter":

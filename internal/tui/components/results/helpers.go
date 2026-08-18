@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
+	"charm.land/bubbles/v2/viewport"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mvgrimes/mytui/internal/config"
 	"github.com/mvgrimes/mytui/internal/db"
@@ -28,7 +28,7 @@ func AddResult(m *Model, result *db.Result, query string, format formatter.Forma
 		Formatted:       fullResult,
 		FormattedHeader: header,
 		FormattedData:   data,
-		Viewport:        viewport.New(width, 7),
+		Viewport:        viewport.New(viewport.WithWidth(width), viewport.WithHeight(7)),
 		Format:          format,
 		SelectedRow:     0,
 	}
@@ -48,7 +48,7 @@ func AddResultFromText(m *Model, text string, query string, width int, maxResult
 		DisplaySize: 10,
 		Expanded:    true,
 		Formatted:   text,
-		Viewport:    viewport.New(width, 10),
+		Viewport:    viewport.New(viewport.WithWidth(width), viewport.WithHeight(10)),
 	}
 	r.Viewport.SetContent(text)
 	m.Results = append(m.Results, r)
@@ -180,19 +180,19 @@ func ensureSelectionVisible(res *core.Result) {
 		return
 	}
 
-	viewportTop := res.Viewport.YOffset
-	viewportBottom := viewportTop + res.Viewport.Height - 1
+	viewportTop := res.Viewport.YOffset()
+	viewportBottom := viewportTop + res.Viewport.Height() - 1
 
 	if res.SelectedRow < viewportTop {
 		res.Viewport.SetYOffset(res.SelectedRow)
 	} else if res.SelectedRow > viewportBottom {
-		res.Viewport.SetYOffset(res.SelectedRow - res.Viewport.Height + 1)
+		res.Viewport.SetYOffset(res.SelectedRow - res.Viewport.Height() + 1)
 	}
 }
 
 func scrollBottomBorderIntoView(res *core.Result) {
 	if res.FormattedHeader != "" {
-		res.Viewport.SetYOffset(res.SelectedRow - res.Viewport.Height + 2)
+		res.Viewport.SetYOffset(res.SelectedRow - res.Viewport.Height() + 2)
 	}
 }
 

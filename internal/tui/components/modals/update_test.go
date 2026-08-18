@@ -5,14 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestUpdateRowDetailPageDownAndPageUp(t *testing.T) {
 	m := RowDetailModel{
 		Show:     true,
-		Viewport: viewport.New(20, 4),
+		Viewport: viewport.New(viewport.WithWidth(20), viewport.WithHeight(4)),
 	}
 
 	var lines []string
@@ -21,19 +21,19 @@ func TestUpdateRowDetailPageDownAndPageUp(t *testing.T) {
 	}
 	m.Viewport.SetContent(strings.Join(lines, "\n"))
 
-	handled, _ := UpdateRowDetail(&m, tea.KeyMsg{Type: tea.KeyPgDown})
+	handled, _ := UpdateRowDetail(&m, tea.KeyPressMsg{Code: tea.KeyPgDown})
 	if !handled {
 		t.Fatal("PageDown was not handled")
 	}
-	if m.Viewport.YOffset != 4 {
-		t.Fatalf("YOffset after PageDown = %d, want 4", m.Viewport.YOffset)
+	if m.Viewport.YOffset() != 4 {
+		t.Fatalf("YOffset after PageDown = %d, want 4", m.Viewport.YOffset())
 	}
 
-	handled, _ = UpdateRowDetail(&m, tea.KeyMsg{Type: tea.KeyPgUp})
+	handled, _ = UpdateRowDetail(&m, tea.KeyPressMsg{Code: tea.KeyPgUp})
 	if !handled {
 		t.Fatal("PageUp was not handled")
 	}
-	if m.Viewport.YOffset != 0 {
-		t.Fatalf("YOffset after PageUp = %d, want 0", m.Viewport.YOffset)
+	if m.Viewport.YOffset() != 0 {
+		t.Fatalf("YOffset after PageUp = %d, want 0", m.Viewport.YOffset())
 	}
 }

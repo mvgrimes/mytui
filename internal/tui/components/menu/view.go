@@ -3,7 +3,7 @@ package menu
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/mvgrimes/mytui/internal/tui/core"
 )
 
@@ -28,7 +28,7 @@ func Render(m *Model, cmds []Command) string {
 		Background(lipgloss.Color("#1A1A1A")).
 		Padding(0, 1)
 
-	activeStyle := style.Copy().
+	activeStyle := style.
 		Foreground(lipgloss.Color("#000000")).
 		Background(lipgloss.Color("#00AAFF")).
 		Bold(true)

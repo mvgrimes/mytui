@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
 
 	"github.com/mvgrimes/mytui/internal/config"
@@ -15,7 +15,7 @@ import (
 	"github.com/mvgrimes/mytui/internal/tui"
 )
 
-var version = "0.2.1"
+var version = "0.3.0"
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -161,7 +161,7 @@ func runREPL(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	p := tea.NewProgram(tui.NewModel(conn, cfg), tea.WithAltScreen())
+	p := tea.NewProgram(tui.NewModel(conn, cfg))
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("error running TUI: %v", err)
 	}

@@ -1,6 +1,6 @@
 package modals
 
-import "github.com/charmbracelet/bubbles/viewport"
+import "charm.land/bubbles/v2/viewport"
 
 type Model struct {
 	RowDetail     RowDetailModel

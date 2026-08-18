@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/lipgloss/v2"
 )
 
 func Render(m *Model) string {
@@ -18,7 +18,7 @@ func Render(m *Model) string {
 		Background(lipgloss.Color("#1A1A1A")).
 		Padding(0, 1)
 
-	activeStyle := style.Copy().
+	activeStyle := style.
 		Foreground(lipgloss.Color("#000000")).
 		Background(lipgloss.Color("#00AAFF")).
 		Bold(true)

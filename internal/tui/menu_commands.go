@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/mvgrimes/mytui/internal/formatter"
 	"github.com/mvgrimes/mytui/internal/special"
 	"github.com/mvgrimes/mytui/internal/tui/components/menu"

@@ -3,7 +3,7 @@ package core
 import (
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
+	"charm.land/bubbles/v2/viewport"
 	"github.com/mvgrimes/mytui/internal/db"
 	"github.com/mvgrimes/mytui/internal/formatter"
 )

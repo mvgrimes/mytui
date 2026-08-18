@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mvgrimes/mytui/internal/tui/core"
 	"github.com/mvgrimes/mytui/internal/tui/styles"
@@ -75,8 +75,8 @@ func RenderPanel(m *Model, focus core.Focus, width int, availableHeight int) (st
 
 			viewContent := r.Viewport.View()
 			if focused && r.DbResult != nil && len(r.DbResult.Rows) > 0 && r.SelectedRow >= 0 {
-				viewportSelectedRow := r.SelectedRow - r.Viewport.YOffset
-				if viewportSelectedRow >= 0 && viewportSelectedRow < r.Viewport.Height {
+				viewportSelectedRow := r.SelectedRow - r.Viewport.YOffset()
+				if viewportSelectedRow >= 0 && viewportSelectedRow < r.Viewport.Height() {
 					viewContent = highlightSelectedRow(viewContent, viewportSelectedRow, width)
 				}
 			}

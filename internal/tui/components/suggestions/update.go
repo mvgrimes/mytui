@@ -1,8 +1,8 @@
 package suggestions
 
 import (
-	"github.com/charmbracelet/bubbles/textarea"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/mvgrimes/mytui/internal/vim"
 )
 
@@ -16,11 +16,11 @@ type UpdateDeps struct {
 	ShouldOpenOnEdit  func() bool
 }
 
-func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
+func UpdateKey(m *Model, msg tea.KeyPressMsg, deps UpdateDeps) (bool, tea.Cmd) {
 	if !m.Show {
 		return false, nil
 	}
-	if msg.Type == tea.KeyEnter && msg.Alt {
+	if (msg.Code == tea.KeyEnter || msg.Code == tea.KeyKpEnter) && msg.Mod.Contains(tea.ModAlt) {
 		return false, nil
 	}
 
@@ -65,11 +65,11 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 			m.Show = false
 			consumed = true
 		}
-	case " ":
+	case "space":
 		if m.Index >= 0 && m.Index < len(m.Items) {
 			deps.ApplySuggestion()
 			m.Index = -1
-			*deps.Textarea, _ = deps.Textarea.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+			*deps.Textarea, _ = deps.Textarea.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
 			deps.UpdateSuggestions()
 			consumed = true
 		}
@@ -77,14 +77,14 @@ func UpdateKey(m *Model, msg tea.KeyMsg, deps UpdateDeps) (bool, tea.Cmd) {
 		if m.Index >= 0 && m.Index < len(m.Items) {
 			deps.ApplySuggestion()
 			m.Show = false
-			*deps.Textarea, _ = deps.Textarea.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{';'}})
+			*deps.Textarea, _ = deps.Textarea.Update(tea.KeyPressMsg{Code: ';', Text: ";"})
 			consumed = true
 		}
 	case ",":
 		if m.Index >= 0 && m.Index < len(m.Items) {
 			deps.ApplySuggestion()
 			m.Show = false
-			*deps.Textarea, _ = deps.Textarea.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}})
+			*deps.Textarea, _ = deps.Textarea.Update(tea.KeyPressMsg{Code: ',', Text: ","})
 			consumed = true
 		}
 	case "esc":

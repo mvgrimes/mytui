@@ -36,7 +36,7 @@ func (m *Model) ApplySuggestion(sugg *suggestions.Model) {
 	newText := text[:start] + s.Text + text[pos:]
 	m.Textarea.SetValue(newText)
 	// Try to set cursor after the inserted suggestion text.
-	m.Textarea.SetCursor(start + len(s.Text))
+	m.Textarea.SetCursorColumn(start + len(s.Text))
 }
 
 // ShouldOpenSuggestionsOnEdit determines if suggestions should be visible based on

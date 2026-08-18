@@ -32,7 +32,7 @@ func TotalResultsHeight(m *Model) int {
 			if r.FormattedHeader != "" {
 				total += strings.Count(r.FormattedHeader, "\n") + 1
 			}
-			total += r.Viewport.Height
+			total += r.Viewport.Height()
 		}
 	}
 	return total
@@ -80,7 +80,7 @@ func EnsureFocusedResultVisible(m *Model, available int) {
 			if r.FormattedHeader != "" {
 				top += strings.Count(r.FormattedHeader, "\n") + 1
 			}
-			top += r.Viewport.Height
+			top += r.Viewport.Height()
 		}
 	}
 
@@ -90,7 +90,7 @@ func EnsureFocusedResultVisible(m *Model, available int) {
 		if r.FormattedHeader != "" {
 			height += strings.Count(r.FormattedHeader, "\n") + 1
 		}
-		height += r.Viewport.Height
+		height += r.Viewport.Height()
 	}
 	bottom := top + height
 
