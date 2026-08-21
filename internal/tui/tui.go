@@ -70,6 +70,9 @@ func (m *Model) recalculateHeight() {
 	}
 	available := results.ComputeAvailableHeight(m.query.Textarea.Value(), m.query.Textarea.Placeholder, m.height)
 	results.ClampScrollOffset(&m.results, available)
+	if m.focus == core.FocusResults {
+		results.EnsureFocusedResultVisible(&m.results, available)
+	}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
