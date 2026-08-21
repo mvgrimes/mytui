@@ -23,14 +23,10 @@ func UpdateRowDetail(m *RowDetailModel, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc":
 		m.Show = false
-	case "j", "down":
-		m.Viewport.ScrollDown(1)
-	case "k", "up":
-		m.Viewport.ScrollUp(1)
-	case "pgup":
-		m.Viewport.PageUp()
-	case "pgdown":
-		m.Viewport.PageDown()
+	case "j", "down", "k", "up", "pgup", "pgdown":
+		var cmd tea.Cmd
+		m.Viewport, cmd = m.Viewport.Update(msg)
+		return true, cmd
 	case "h", "left":
 		m.Viewport.ScrollLeft(5)
 	case "l", "right":
