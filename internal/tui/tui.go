@@ -20,7 +20,7 @@ import (
 )
 
 func (m Model) Init() tea.Cmd {
-	return m.refreshCacheCmd()
+	return tea.Batch(m.refreshCacheCmd(), m.databaseAlertTickCmd())
 }
 
 func (m *Model) saveToHistory(line string) {
@@ -79,8 +79,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var tiCmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case databaseAlertTickMsg:
+		m.updateDatabaseAlert(time.Time(msg))
+		return m, m.databaseAlertTickCmd()
 	case *completion.DBCache:
 		m.completer.UpdateCache(msg)
+		m.databaseName = msg.DefaultSchema
 		return m, nil
 	case queryEditorFinishedMsg:
 		if msg.err != nil {
@@ -98,6 +102,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recalculateHeight()
 		return m, m.query.Textarea.Focus()
 	case tea.KeyPressMsg:
+		if msg.Code == tea.KeyEscape && m.alertText != "" {
+			m.alertText = ""
+			return m, nil
+		}
 		if handled, cmd := modals.UpdateRowDetail(&m.modals.RowDetail, msg); handled {
 			return m, cmd
 		}
@@ -264,7 +272,9 @@ func (m *Model) historyListHeight() int {
 }
 
 func (m Model) View() tea.View {
-	qHeader := query.RenderHeader(m.focus == core.FocusQuery, m.width, m.conn.Config.User, m.conn.Config.Host, m.conn.Config.Port, m.conn.GetCurrentDatabase(), m.vimState, m.conn.Config.Socket)
+	// Rendering (including alert ticks) must not query the database or trigger
+	// reconnects. The schema cache refresh updates the active database name.
+	qHeader := query.RenderHeader(m.focus == core.FocusQuery, m.width, m.conn.Config.User, m.conn.Config.Host, m.conn.Config.Port, m.databaseName, m.vimState, m.conn.Config.Socket)
 
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Margin(0, 1)
 	helpTextStr := "j/k:select · /:search · n/N:next/prev · Enter:detail · y:copy · v:edit · d:delete · R:rerun · +/-:size · Tab:focus"
@@ -324,6 +334,7 @@ func (m Model) View() tea.View {
 		view = compositeOverlay(fg, bg, xOff, yOff)
 	}
 
+	view = m.renderDatabaseAlert(view)
 	v := tea.NewView(view)
 	v.AltScreen = true
 	return v

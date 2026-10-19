@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
@@ -40,11 +41,15 @@ type Model struct {
 	width     int
 	height    int
 
-	currentFormat formatter.Format
-	onceFormat    formatter.Format
-	pagerOverride string
-	lastQuery     string
-	specialOutput bytes.Buffer
+	currentFormat  formatter.Format
+	onceFormat     formatter.Format
+	pagerOverride  string
+	lastQuery      string
+	specialOutput  bytes.Buffer
+	databaseLogger *DatabaseLogger
+	databaseName   string
+	alertText      string
+	alertExpires   time.Time
 }
 
 func NewModel(conn *db.Connection, cfg *config.Config) Model {
@@ -57,6 +62,13 @@ func NewModel(conn *db.Connection, cfg *config.Config) Model {
 		vimState:      vim.NewVimState(),
 		focus:         core.FocusQuery,
 		currentFormat: formatter.Format(cfg.TableFormat),
+	}
+	if conn != nil {
+		m.databaseLogger, _ = conn.Config.Logger.(*DatabaseLogger)
+		m.databaseName = conn.Config.Database
+	}
+	if m.databaseName == "" {
+		m.databaseName = "(none)"
 	}
 	return m
 }

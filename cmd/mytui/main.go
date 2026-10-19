@@ -15,7 +15,7 @@ import (
 	"github.com/mvgrimes/mytui/internal/tui"
 )
 
-var version = "0.3.1"
+var version = "0.4.0"
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -136,6 +136,9 @@ func runREPL(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Connecting to MySQL at %s:%d as user %s...\n", host, port, user)
+	if !replFlag && executeFlag == "" {
+		dbConfig.Logger = tui.NewDatabaseLogger()
+	}
 	conn, err := db.NewConnection(dbConfig)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %v", err)

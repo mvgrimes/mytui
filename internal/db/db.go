@@ -22,6 +22,7 @@ type Config struct {
 	SSLCa    string
 	SSLCert  string
 	SSLKey   string
+	Logger   mysql.Logger // nil preserves the driver's default logger
 }
 
 type Connection struct {
@@ -39,6 +40,9 @@ func NewConnection(config Config) (*Connection, error) {
 	mysqlCfg, err := mysql.ParseDSN(buildDSN(config))
 	if err != nil {
 		return nil, err
+	}
+	if config.Logger != nil {
+		mysqlCfg.Logger = config.Logger
 	}
 
 	// BeforeConnect is called each time database/sql opens a new underlying
@@ -66,6 +70,7 @@ func NewConnection(config Config) (*Connection, error) {
 	db.SetMaxIdleConns(1)
 
 	if err := db.Ping(); err != nil {
+		db.Close()
 		return nil, err
 	}
 
