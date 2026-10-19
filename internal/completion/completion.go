@@ -176,7 +176,26 @@ func (c *Completer) Complete(d Document) []Suggestion {
 		suggestions = append(suggestions, c.columnCandidates(definedTables, ctx.parent)...)
 	}
 	if completionTypeIs(ctx.types, CompletionTypeTable) {
-		suggestions = append(suggestions, c.tableCandidates(ctx.parent, definedTables)...)
+		tables := c.tableCandidates(ctx.parent, definedTables)
+		if ctx.parent.Type == ParentTypeSchema {
+			// Suggestions replace the whole identifier, including its schema.
+			// Preserve the user's spelling and quoting of that qualifier.
+			if dot := strings.LastIndex(lastWord, "."); dot >= 0 {
+				for i := range tables {
+					table := tables[i].Text
+					if strings.HasPrefix(lastWord[dot+1:], "`") {
+						table = "`" + strings.ReplaceAll(table, "`", "``") + "`"
+					}
+					tables[i].Text = lastWord[:dot+1] + table
+				}
+			}
+		}
+		suggestions = append(suggestions, tables...)
+	}
+	if completionTypeIs(ctx.types, CompletionTypeSchema) {
+		for _, schema := range c.cache.SortedSchemas() {
+			suggestions = append(suggestions, Suggestion{Text: schema, Description: "database"})
+		}
 	}
 	if completionTypeIs(ctx.types, CompletionTypeFunction) {
 		// Just keywords for now as placeholders for functions

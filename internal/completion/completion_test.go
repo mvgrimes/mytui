@@ -2,8 +2,46 @@ package completion
 
 import (
 	"github.com/mvgrimes/mytui/internal/db"
+	"reflect"
 	"testing"
 )
+
+func TestCompleteAcrossSchemas(t *testing.T) {
+	c := NewCompleter()
+	cache := NewDBCache()
+	cache.DefaultSchema = "app"
+	cache.Schemas["APP"] = "app"
+	cache.Schemas["REPORTING"] = "reporting"
+	cache.SchemaTables["APP"] = []string{"users"}
+	cache.SchemaTables["REPORTING"] = []string{"events", "users"}
+	c.UpdateCache(cache)
+	for _, tt := range []struct {
+		query string
+		want  []string
+	}{
+		{"SELECT * FROM reporting.", []string{"reporting.events", "reporting.users"}},
+		{"SELECT * FROM reporting.ev", []string{"reporting.events"}},
+		{"SELECT * FROM REPORTING.E", []string{"REPORTING.events"}},
+		{"SELECT * FROM `reporting`.", []string{"`reporting`.events", "`reporting`.users"}},
+		{"SELECT * FROM `reporting`.`ev", []string{"`reporting`.`events`"}},
+		{"SELECT * FROM users JOIN reporting.", []string{"reporting.events", "reporting.users"}},
+		{"SELECT * FROM missing.", nil},
+		{"SELECT * FROM ev", nil},
+		{"SELECT * FROM us", []string{"users"}},
+		{"SELECT * FROM rep", []string{"reporting"}},
+		{"USE rep", []string{"reporting"}},
+	} {
+		t.Run(tt.query, func(t *testing.T) {
+			var got []string
+			for _, s := range c.Complete(Document{Text: tt.query, CursorPosition: len(tt.query)}) {
+				got = append(got, s.Text)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestCompleter_resolveTable(t *testing.T) {
 	c := NewCompleter()
