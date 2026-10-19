@@ -10,6 +10,7 @@ import (
 	"github.com/mvgrimes/mytui/internal/db"
 	"github.com/mvgrimes/mytui/internal/formatter"
 	"github.com/mvgrimes/mytui/internal/tui/core"
+	"github.com/mvgrimes/mytui/internal/tui/styles"
 )
 
 func AddResult(m *Model, result *db.Result, query string, format formatter.Format, width int, maxResults int, cfg *config.Config) {
@@ -39,6 +40,11 @@ func AddResult(m *Model, result *db.Result, query string, format formatter.Forma
 		m.Results = m.Results[1:]
 		m.FocusedResultIndex--
 	}
+}
+
+// AddErrorResult preserves the error's styling when the entry is scrolled or resized.
+func AddErrorResult(m *Model, text string, query string, width int, maxResults int) {
+	AddResultFromText(m, styles.ErrorStyle.Width(max(width-2, 1)).Render(text), query, width, maxResults)
 }
 
 func AddResultFromText(m *Model, text string, query string, width int, maxResults int) {

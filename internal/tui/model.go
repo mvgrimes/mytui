@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mvgrimes/mytui/internal/completion"
@@ -231,8 +230,9 @@ func (m *Model) executeQuery(queryText string) tea.Cmd {
 
 	result, err := m.conn.ExecuteQuery(queryText)
 	if err != nil {
-		wrappedError := lipgloss.NewStyle().Width(m.width - 2).Render(fmt.Sprintf("Error: %v", err))
-		m.addResultFromText(wrappedError, queryText)
+		results.AddErrorResult(&m.results, fmt.Sprintf("Error: %v", err), queryText, m.width, m.config.MaxResults)
+		available := results.ComputeAvailableHeight(m.query.Textarea.Value(), m.query.Textarea.Placeholder, m.height)
+		results.ScrollToBottom(&m.results, available)
 		m.recalculateHeight()
 		return nil
 	}

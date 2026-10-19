@@ -3,6 +3,8 @@ package styles
 import "charm.land/lipgloss/v2"
 
 var (
+	ErrorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555"))
+
 	HeaderStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#AAAAAA")).
 			Background(lipgloss.Color("#222222"))
