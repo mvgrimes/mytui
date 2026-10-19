@@ -379,6 +379,13 @@ func filterTokenList(reader *astutil.NodeReader, matcher astutil.NodeMatcher) as
 	return &ast.Statement{Toks: res}
 }
 
+func tableIdentifierName(node ast.Node) string {
+	if ident, ok := node.(*ast.Identifier); ok {
+		return ident.NoQuoteString()
+	}
+	return node.String()
+}
+
 func parseTableInfo(idents ast.Node) ([]*TableInfo, error) {
 	res := []*TableInfo{}
 	switch v := idents.(type) {
@@ -394,8 +401,8 @@ func parseTableInfo(idents ast.Node) ([]*TableInfo, error) {
 	case *ast.MemberIdentifier:
 		if v.Parent != nil {
 			ti := &TableInfo{
-				DatabaseSchema: v.Parent.String(),
-				Name:           v.GetChild().String(),
+				DatabaseSchema: tableIdentifierName(v.Parent),
+				Name:           tableIdentifierName(v.GetChild()),
 			}
 			res = append(res, ti)
 		}
@@ -422,8 +429,8 @@ func identifierListToTableInfo(il *ast.IdentifierList) ([]*TableInfo, error) {
 			tis = append(tis, ti)
 		case *ast.MemberIdentifier:
 			ti := &TableInfo{
-				DatabaseSchema: v.Parent.String(),
-				Name:           v.GetChild().String(),
+				DatabaseSchema: tableIdentifierName(v.Parent),
+				Name:           tableIdentifierName(v.GetChild()),
 			}
 			tis = append(tis, ti)
 		case *ast.Aliased:
@@ -442,8 +449,8 @@ func aliasedToTableInfo(aliased *ast.Aliased) (*TableInfo, error) {
 	case *ast.Identifier:
 		ti.Name = v.NoQuoteString()
 	case *ast.MemberIdentifier:
-		ti.DatabaseSchema = v.Parent.String()
-		ti.Name = v.GetChild().String()
+		ti.DatabaseSchema = tableIdentifierName(v.Parent)
+		ti.Name = tableIdentifierName(v.GetChild())
 	case *ast.Parenthesis:
 		tables, err := extractAllTableIdentifiers(v.Inner(), true)
 		if err != nil {

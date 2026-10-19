@@ -336,31 +336,27 @@ func getCompletionTypes(nw *parseutil.NodeWalker) *CompletionContext {
 
 func (c *Completer) columnCandidates(targetTables []*parseutil.TableInfo, parent *completionParent) []Suggestion {
 	var candidates []Suggestion
-
-	switch parent.Type {
-	case ParentTypeNone:
-		for _, table := range targetTables {
-			if cols, ok := c.cache.ColumnDescs(table.Name); ok {
-				for _, col := range cols {
-					candidates = append(candidates, Suggestion{
-						Text:        col.Name,
-						Description: "column of " + table.Name,
-					})
-				}
-			}
+	if parent.Type != ParentTypeNone && parent.Type != ParentTypeTable {
+		return candidates
+	}
+	for _, table := range targetTables {
+		if parent.Type == ParentTypeTable && table.Name != parent.Name && table.Alias != parent.Name {
+			continue
 		}
-	case ParentTypeTable:
-		for _, table := range targetTables {
-			if table.Name != parent.Name && table.Alias != parent.Name {
-				continue
-			}
-			if cols, ok := c.cache.ColumnDescs(table.Name); ok {
-				for _, col := range cols {
-					candidates = append(candidates, Suggestion{
-						Text:        parent.Name + "." + col.Name,
-						Description: "column of " + table.Name,
-					})
+		schema := table.DatabaseSchema
+		if schema == "" {
+			schema = c.cache.DefaultSchema
+		}
+		if cols, ok := c.cache.ColumnDatabase(schema, table.Name); ok {
+			for _, col := range cols {
+				text := col.Name
+				if parent.Type == ParentTypeTable {
+					text = parent.Name + "." + text
 				}
+				candidates = append(candidates, Suggestion{
+					Text:        text,
+					Description: "column of " + table.Name,
+				})
 			}
 		}
 	}

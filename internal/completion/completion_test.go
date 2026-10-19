@@ -43,6 +43,47 @@ func TestCompleteAcrossSchemas(t *testing.T) {
 	}
 }
 
+func TestCompleteCrossSchemaAliasColumns(t *testing.T) {
+	c := NewCompleter()
+	cache := NewDBCache()
+	cache.DefaultSchema = "app"
+	cache.SchemaTables["APP"] = []string{"events"}
+	cache.SchemaTables["REPORTING"] = []string{"events"}
+	cache.ColumnsWithParent["APP\tEVENTS"] = []*db.ColumnDesc{
+		{ColumnBase: db.ColumnBase{Name: "local_id"}},
+	}
+	cache.ColumnsWithParent["REPORTING\tEVENTS"] = []*db.ColumnDesc{
+		{ColumnBase: db.ColumnBase{Name: "event_id"}},
+		{ColumnBase: db.ColumnBase{Name: "event_name"}},
+	}
+	c.UpdateCache(cache)
+	for _, tt := range []struct {
+		before string
+		after  string
+		want   []string
+	}{
+		{"SELECT * FROM reporting.events st WHERE st.", "", []string{"st.event_id", "st.event_name"}},
+		{"SELECT st.", " FROM reporting.events st", []string{"st.event_id", "st.event_name"}},
+		{"SELECT st.event_n", " FROM reporting.events AS st", []string{"st.event_name"}},
+		{"SELECT * FROM events e JOIN reporting.events st ON st.", "", []string{"st.event_id", "st.event_name"}},
+		{"SELECT * FROM `reporting`.`events` AS st WHERE st.", "", []string{"st.event_id", "st.event_name"}},
+		{"SELECT * FROM reporting.events st WHERE events.", "", []string{"events.event_id", "events.event_name"}},
+		{"SELECT ", " FROM reporting.events st", []string{"event_id", "event_name"}},
+		{"SELECT * FROM events st WHERE st.", "", []string{"st.local_id"}},
+		{"SELECT * FROM missing.events st WHERE st.", "", nil},
+	} {
+		t.Run(tt.before+tt.after, func(t *testing.T) {
+			var got []string
+			for _, s := range c.Complete(Document{Text: tt.before + tt.after, CursorPosition: len(tt.before)}) {
+				got = append(got, s.Text)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCompleter_resolveTable(t *testing.T) {
 	c := NewCompleter()
 	cache := NewDBCache()
