@@ -62,5 +62,5 @@ homebrew_casks:
     description: Command-line client for MySQL and MariaDB with auto-completion and syntax highlighting, reimagined in Go
     hooks:
       post:
-        install: |
-          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/mytui"] if OS.mac?
+        install_steps: |
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/mytui"] if OS.mac?
