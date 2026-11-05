@@ -1,19 +1,21 @@
 package completion
 
 import (
-	"github.com/mvgrimes/mytui/internal/db"
+	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/mvgrimes/mytui/internal/db"
 )
 
 func TestCompleteAcrossSchemas(t *testing.T) {
 	c := NewCompleter()
 	cache := NewDBCache()
 	cache.DefaultSchema = "app"
-	cache.Schemas["APP"] = "app"
-	cache.Schemas["REPORTING"] = "reporting"
-	cache.SchemaTables["APP"] = []string{"users"}
-	cache.SchemaTables["REPORTING"] = []string{"events", "users"}
+	cache.Schemas["app"] = "app"
+	cache.Schemas["reporting"] = "reporting"
+	cache.SchemaTables["app"] = []string{"users"}
+	cache.SchemaTables["reporting"] = []string{"events", "users"}
 	c.UpdateCache(cache)
 	for _, tt := range []struct {
 		query string
@@ -47,12 +49,12 @@ func TestCompleteCrossSchemaAliasColumns(t *testing.T) {
 	c := NewCompleter()
 	cache := NewDBCache()
 	cache.DefaultSchema = "app"
-	cache.SchemaTables["APP"] = []string{"events"}
-	cache.SchemaTables["REPORTING"] = []string{"events"}
-	cache.ColumnsWithParent["APP\tEVENTS"] = []*db.ColumnDesc{
+	cache.SchemaTables["app"] = []string{"events"}
+	cache.SchemaTables["reporting"] = []string{"events"}
+	cache.ColumnsWithParent["app\tevents"] = []*db.ColumnDesc{
 		{ColumnBase: db.ColumnBase{Name: "local_id"}},
 	}
-	cache.ColumnsWithParent["REPORTING\tEVENTS"] = []*db.ColumnDesc{
+	cache.ColumnsWithParent["reporting\tevents"] = []*db.ColumnDesc{
 		{ColumnBase: db.ColumnBase{Name: "event_id"}},
 		{ColumnBase: db.ColumnBase{Name: "event_name"}},
 	}
@@ -63,6 +65,8 @@ func TestCompleteCrossSchemaAliasColumns(t *testing.T) {
 		want   []string
 	}{
 		{"SELECT * FROM reporting.events st WHERE st.", "", []string{"st.event_id", "st.event_name"}},
+		{"SELECT * FROM reporting.events st WHERE ST.EVENT_N", "", []string{"ST.event_name"}},
+		{"SELECT ST.EVENT_N", " FROM REPORTING.EVENTS st", []string{"ST.event_name"}},
 		{"SELECT st.", " FROM reporting.events st", []string{"st.event_id", "st.event_name"}},
 		{"SELECT st.event_n", " FROM reporting.events AS st", []string{"st.event_name"}},
 		{"SELECT * FROM events e JOIN reporting.events st ON st.", "", []string{"st.event_id", "st.event_name"}},
@@ -137,15 +141,15 @@ func TestCompleter_Complete(t *testing.T) {
 	cache := NewDBCache()
 	cache.DefaultSchema = "DB"
 	cache.SchemaTables["DB"] = []string{"users", "organizations", "billings"}
-	cache.ColumnsWithParent["DB\tUSERS"] = []*db.ColumnDesc{
+	cache.ColumnsWithParent["DB\tusers"] = []*db.ColumnDesc{
 		{ColumnBase: db.ColumnBase{Name: "id"}},
 		{ColumnBase: db.ColumnBase{Name: "name"}},
 	}
-	cache.ColumnsWithParent["DB\tBILLINGS"] = []*db.ColumnDesc{
+	cache.ColumnsWithParent["DB\tbillings"] = []*db.ColumnDesc{
 		{ColumnBase: db.ColumnBase{Name: "id"}},
 		{ColumnBase: db.ColumnBase{Name: "amount"}},
 	}
-	cache.ColumnsWithParent["DB\tORGANIZATIONS"] = []*db.ColumnDesc{
+	cache.ColumnsWithParent["DB\torganizations"] = []*db.ColumnDesc{
 		{ColumnBase: db.ColumnBase{Name: "id"}},
 		{ColumnBase: db.ColumnBase{Name: "display_name"}},
 	}
@@ -238,5 +242,49 @@ func TestCompleter_Complete(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCompleteCaseInsensitiveMatching(t *testing.T) {
+	for _, mode := range []int{-1, 0, 1, 2} {
+		cache := NewDBCache()
+		cache.LowerCaseTableNames = mode
+		cache.DefaultSchema = "App"
+		cache.Schemas["App"] = "App"
+		cache.SchemaTables["App"] = []string{"Users", "users"}
+		cache.ColumnsWithParent[columnDatabaseKey("App", "Users")] = []*db.ColumnDesc{
+			{ColumnBase: db.ColumnBase{Name: "UserID"}},
+		}
+		cache.ColumnsWithParent[columnDatabaseKey("App", "users")] = []*db.ColumnDesc{
+			{ColumnBase: db.ColumnBase{Name: "other_id"}},
+		}
+		c := NewCompleter()
+		c.UpdateCache(cache)
+		for _, tt := range []struct {
+			before string
+			after  string
+			want   []string
+		}{
+			{"seL", "", []string{"SELECT"}},
+			{"USE aP", "", []string{"App"}},
+			{"SELECT * FROM uS", "", []string{"Users", "users"}},
+			{"SELECT * FROM App.uS", "", []string{"App.Users", "App.users"}},
+			{"SELECT * FROM Users u WHERE U.USERI", "", []string{"U.UserID"}},
+			{"SELECT U.USERI", " FROM Users u", []string{"U.UserID"}},
+			{"SELECT * FROM Users WHERE Users.", "", []string{"Users.UserID"}},
+			{"SELECT * FROM users WHERE users.", "", []string{"users.other_id"}},
+			{"SELECT * FROM Users JOIN users ON USERS.", "", nil},
+			{"SELECT * FROM Users A JOIN users a ON a.", "", []string{"a.other_id"}},
+		} {
+			t.Run(fmt.Sprintf("mode=%d/%s%s", mode, tt.before, tt.after), func(t *testing.T) {
+				var got []string
+				for _, s := range c.Complete(Document{Text: tt.before + tt.after, CursorPosition: len(tt.before)}) {
+					got = append(got, s.Text)
+				}
+				if !reflect.DeepEqual(got, tt.want) {
+					t.Fatalf("got %v, want %v", got, tt.want)
+				}
+			})
+		}
 	}
 }

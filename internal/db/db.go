@@ -135,6 +135,17 @@ func (c *Connection) GetServerInfo() (string, error) {
 	return version, nil
 }
 
+func (c *Connection) GetLowerCaseTableNames() (int, error) {
+	var mode int
+	if err := c.db.QueryRow("SELECT @@lower_case_table_names").Scan(&mode); err != nil {
+		return -1, err
+	}
+	if mode < 0 || mode > 2 {
+		return -1, fmt.Errorf("unexpected lower_case_table_names value: %d", mode)
+	}
+	return mode, nil
+}
+
 type Result struct {
 	Headers  []string
 	Rows     [][]interface{}

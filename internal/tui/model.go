@@ -149,6 +149,9 @@ func (m *Model) ExecuteQueryWithFormat(queryText string, format formatter.Format
 func (m *Model) fetchCache() (*completion.DBCache, error) {
 	cache := completion.NewDBCache()
 	cache.DefaultSchema = m.conn.GetCurrentDatabase()
+	if mode, err := m.conn.GetLowerCaseTableNames(); err == nil {
+		cache.LowerCaseTableNames = mode
+	}
 
 	schemas, err := m.conn.GetSchemas()
 	if err != nil {
@@ -156,17 +159,17 @@ func (m *Model) fetchCache() (*completion.DBCache, error) {
 	}
 
 	for _, s := range schemas {
-		cache.Schemas[strings.ToUpper(s)] = s
+		cache.Schemas[s] = s
 		tables, err := m.conn.GetTablesFromSchema(s)
 		if err != nil {
 			continue
 		}
-		cache.SchemaTables[strings.ToUpper(s)] = tables
+		cache.SchemaTables[s] = tables
 
 		cols, err := m.conn.DescribeDatabaseTableBySchema(s)
 		if err == nil {
 			for _, col := range cols {
-				key := strings.ToUpper(s) + "\t" + strings.ToUpper(col.Table)
+				key := s + "\t" + col.Table
 				cache.ColumnsWithParent[key] = append(cache.ColumnsWithParent[key], col)
 			}
 		}

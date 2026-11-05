@@ -13,8 +13,8 @@ func TestApplyCrossSchemaSuggestion(t *testing.T) {
 	c := completion.NewCompleter()
 	cache := completion.NewDBCache()
 	cache.DefaultSchema = "app"
-	cache.Schemas["REPORTING"] = "reporting"
-	cache.SchemaTables["REPORTING"] = []string{"events"}
+	cache.Schemas["reporting"] = "reporting"
+	cache.SchemaTables["reporting"] = []string{"events"}
 	c.UpdateCache(cache)
 	for _, prefix := range []string{"reporting.", "reporting.ev", "`reporting`.`ev"} {
 		m := NewModel(&config.Config{})
@@ -40,7 +40,7 @@ func TestApplyCrossSchemaAliasColumnSuggestion(t *testing.T) {
 	c := completion.NewCompleter()
 	cache := completion.NewDBCache()
 	cache.DefaultSchema = "app"
-	cache.ColumnsWithParent["REPORTING\tEVENTS"] = []*db.ColumnDesc{
+	cache.ColumnsWithParent["reporting\tevents"] = []*db.ColumnDesc{
 		{ColumnBase: db.ColumnBase{Name: "event_id"}},
 	}
 	c.UpdateCache(cache)
@@ -55,5 +55,34 @@ func TestApplyCrossSchemaAliasColumnSuggestion(t *testing.T) {
 	m.ApplySuggestion(&sugg)
 	if got, want := m.Textarea.Value(), "SELECT * FROM reporting.events st WHERE st.event_id"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestApplyMixedCaseSuggestion(t *testing.T) {
+	c := completion.NewCompleter()
+	cache := completion.NewDBCache()
+	cache.LowerCaseTableNames = 0
+	cache.DefaultSchema = "App"
+	cache.SchemaTables["App"] = []string{"Users"}
+	cache.ColumnsWithParent["App\tUsers"] = []*db.ColumnDesc{
+		{ColumnBase: db.ColumnBase{Name: "UserID"}},
+	}
+	c.UpdateCache(cache)
+	for _, tt := range []struct{ query, want string }{
+		{"SELECT * FROM uS", "SELECT * FROM Users"},
+		{"SELECT * FROM Users u WHERE U.USERI", "SELECT * FROM Users u WHERE U.UserID"},
+	} {
+		m := NewModel(&config.Config{})
+		m.Textarea.SetValue(tt.query)
+		m.Textarea.CursorEnd()
+		sugg := suggestions.Model{}
+		m.UpdateSuggestions(c, &sugg)
+		if len(sugg.Items) != 1 {
+			t.Fatalf("%s: expected one suggestion, got %v", tt.query, sugg.Items)
+		}
+		m.ApplySuggestion(&sugg)
+		if got := m.Textarea.Value(); got != tt.want {
+			t.Fatalf("got %q, want %q", got, tt.want)
+		}
 	}
 }

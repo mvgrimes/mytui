@@ -339,10 +339,24 @@ func (c *Completer) columnCandidates(targetTables []*parseutil.TableInfo, parent
 	if parent.Type != ParentTypeNone && parent.Type != ParentTypeTable {
 		return candidates
 	}
-	for _, table := range targetTables {
-		if parent.Type == ParentTypeTable && table.Name != parent.Name && table.Alias != parent.Name {
-			continue
+	if parent.Type == ParentTypeTable {
+		// Qualifier matching is a completion convenience, not SQL validation.
+		// Prefer exact spelling; accept a folded match only if unambiguous.
+		var exact, folded []*parseutil.TableInfo
+		for _, table := range targetTables {
+			if table.Name == parent.Name || table.Alias == parent.Name {
+				exact = append(exact, table)
+			}
+			if strings.EqualFold(table.Name, parent.Name) || strings.EqualFold(table.Alias, parent.Name) {
+				folded = append(folded, table)
+			}
 		}
+		targetTables = exact
+		if len(exact) == 0 && len(folded) == 1 {
+			targetTables = folded
+		}
+	}
+	for _, table := range targetTables {
 		schema := table.DatabaseSchema
 		if schema == "" {
 			schema = c.cache.DefaultSchema
@@ -414,34 +428,29 @@ func filterHasPrefix(suggestions []Suggestion, sub string, ignoreCase bool) []Su
 
 // resolveTable attempts to map an alias or table name to an actual table in metadata
 func (c *Completer) resolveTable(fullText, prefix string) string {
-	upperText := strings.ToUpper(fullText)
-	upperPrefix := strings.ToUpper(prefix)
-
-	// Check if prefix is an actual table name
+	tables := make(map[string]string)
 	for _, tableName := range c.cache.SortedTables() {
-		if strings.ToUpper(tableName) == upperPrefix {
-			return tableName
-		}
+		tables[tableName] = tableName
+	}
+	if tableName, ok := lookupIdentifier(tables, prefix, c.cache.LowerCaseTableNames != 0); ok {
+		return tableName
 	}
 
 	// Simple alias detection: "FROM TableName Alias" or "JOIN TableName AS Alias"
 	// Replace common delimiters with spaces for easier splitting
-	cleanText := strings.NewReplacer(",", " ", ";", " ", "\n", " ", "\t", " ").Replace(upperText)
+	cleanText := strings.NewReplacer(",", " ", ";", " ", "\n", " ", "\t", " ").Replace(fullText)
 	words := strings.Fields(cleanText)
 
 	for i := 0; i < len(words)-1; i++ {
-		// Look for table name
-		for _, tableName := range c.cache.SortedTables() {
-			if strings.ToUpper(tableName) == words[i] {
-				// Potential match: "TableName Alias" or "TableName AS Alias"
-				// We check if the next word (or the one after AS) matches our prefix
-				if words[i+1] == upperPrefix {
-					return tableName
-				}
-				if i < len(words)-2 && words[i+1] == "AS" && words[i+2] == upperPrefix {
-					return tableName
-				}
-			}
+		tableName, ok := lookupIdentifier(tables, words[i], c.cache.LowerCaseTableNames != 0)
+		if !ok {
+			continue
+		}
+		if strings.EqualFold(words[i+1], prefix) {
+			return tableName
+		}
+		if i < len(words)-2 && strings.EqualFold(words[i+1], "AS") && strings.EqualFold(words[i+2], prefix) {
+			return tableName
 		}
 	}
 

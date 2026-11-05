@@ -223,6 +223,9 @@ func (r *REPL) formatPrompt() string {
 func (r *REPL) fetchCache() (*completion.DBCache, error) {
 	cache := completion.NewDBCache()
 	cache.DefaultSchema = r.conn.GetCurrentDatabase()
+	if mode, err := r.conn.GetLowerCaseTableNames(); err == nil {
+		cache.LowerCaseTableNames = mode
+	}
 
 	schemas, err := r.conn.GetSchemas()
 	if err != nil {
@@ -230,17 +233,17 @@ func (r *REPL) fetchCache() (*completion.DBCache, error) {
 	}
 
 	for _, s := range schemas {
-		cache.Schemas[strings.ToUpper(s)] = s
+		cache.Schemas[s] = s
 		tables, err := r.conn.GetTablesFromSchema(s)
 		if err != nil {
 			continue
 		}
-		cache.SchemaTables[strings.ToUpper(s)] = tables
+		cache.SchemaTables[s] = tables
 
 		cols, err := r.conn.DescribeDatabaseTableBySchema(s)
 		if err == nil {
 			for _, col := range cols {
-				key := strings.ToUpper(s) + "\t" + strings.ToUpper(col.Table)
+				key := s + "\t" + col.Table
 				cache.ColumnsWithParent[key] = append(cache.ColumnsWithParent[key], col)
 			}
 		}
